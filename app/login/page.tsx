@@ -31,7 +31,8 @@ function LoginForm() {
     } else {
       const { error: e } = await signInWithEmail(email, password)
       if (e) { setError(e.message); setLoading(false); return }
-      router.push('/dashboard')
+      const redirect = searchParams.get('redirect')
+      router.push(redirect === 'create-save' ? '/' : '/dashboard')
     }
   }
 
