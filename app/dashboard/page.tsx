@@ -1,172 +1,71 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, createPoll } from '@/lib/supabase'
-import { TZ_LIST, detectTimezone, findClosestTz } from '@/lib/timezone'
+import Link from 'next/link'
+import { supabase, getMyPolls, deletePoll, type Poll } from '@/lib/supabase'
+import { getTzLabel } from '@/lib/timezone'
+import type { User } from '@supabase/supabase-js'
 
-const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
-const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
-
-export default function HomePage() {
+export default function DashboardPage() {
   const router = useRouter()
-  const today = useRef(new Date()); today.current.setHours(0,0,0,0)
-  const detectedTz = useRef(findClosestTz(detectTimezone()))
+  const [user, setUser] = useState<User | null>(null)
+  const [polls, setPolls] = useState<Poll[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const [title, setTitle] = useState('')
-  const [desc, setDesc] = useState('')
-  const [duration, setDuration] = useState('60')
-  const [location, setLocation] = useState('')
-  const [timezone, setTimezone] = useState(detectedTz.current)
-  const [month, setMonth] = useState(new Date().getMonth())
-  const [year, setYear] = useState(new Date().getFullYear())
-  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
-  const [timeGrid, setTimeGrid] = useState<Record<string, Set<string>>>({})
-  const [interval, setInterval_] = useState(60)
-  const [saving, setSaving] = useState(false)
-  const dragRef = useRef<{ mode: 'on' | 'off' } | null>(null)
-
-  const dateKey = (d: Date) => d.toISOString().split('T')[0]
-  const changeMonth = (dir: number) => {
-    let m = month + dir, y = year
-    if (m > 11) { m = 0; y++ } if (m < 0) { m = 11; y-- }
-    setMonth(m); setYear(y)
-  }
-  const toggleDate = (key: string, isPast: boolean) => {
-    if (isPast) return
-    setSelectedDates(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })
-    setTimeGrid(prev => { const n = { ...prev }; if (n[key]) delete n[key]; else n[key] = new Set(); return n })
-  }
-
-  const first = new Date(year, month, 1)
-  let startDay = first.getDay() - 1; if (startDay < 0) startDay = 6
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const calDays: (number | null)[] = []
-  for (let i = 0; i < startDay; i++) calDays.push(null)
-  for (let d = 1; d <= daysInMonth; d++) calDays.push(d)
-
-  const getSlots = useCallback(() => {
-    const s: string[] = []
-    for (let h = 7; h < 22; h++) for (let m = 0; m < 60; m += interval) {
-      if (h === 21 && m > 0) break
-      s.push(String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'))
-    }
-    return s
-  }, [interval])
-
-  const toggleCell = (ds: string, t: string, mode: 'on' | 'off') => {
-    setTimeGrid(prev => { const n = { ...prev }; const s = new Set(n[ds] || []); if (mode === 'on') s.add(t); else s.delete(t); n[ds] = s; return n })
-  }
-  const applyPreset = (type: string) => {
-    const slots = getSlots()
-    const r: Record<string, [string, string]> = { morning: ['08:00', '12:00'], afternoon: ['12:00', '17:00'], evening: ['17:00', '21:00'], business: ['09:00', '17:00'] }
-    setTimeGrid(prev => { const n = { ...prev }; selectedDates.forEach(ds => { if (type === 'clear') { n[ds] = new Set() } else { const s = new Set(n[ds] || []); const [a, b] = r[type]; slots.forEach(t => { if (t >= a && t < b) s.add(t) }); n[ds] = s } }); return n })
-  }
-  const copyFirstToAll = () => {
-    const sorted = [...selectedDates].sort(); if (sorted.length < 2) return
-    setTimeGrid(prev => { const n = { ...prev }; const f = n[sorted[0]]; for (let i = 1; i < sorted.length; i++) n[sorted[i]] = new Set(f); return n })
-  }
-
-  const handleSave = async () => {
-    if (!title.trim()) return alert('Please add a title.')
-    if (selectedDates.size === 0) return alert('Select at least one date.')
-
-    // Check if logged in
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      // Save form data to sessionStorage so we don't lose it
-      const formData = {
-        title, desc, duration, location, timezone,
-        dates: [...selectedDates],
-        timeGrid: Object.fromEntries(Object.entries(timeGrid).map(([k, v]) => [k, [...v]])),
-      }
-      sessionStorage.setItem('rv_pending_poll', JSON.stringify(formData))
-      router.push('/login?mode=register&redirect=create-save')
-      return
-    }
-
-    // Logged in — save directly
-    setSaving(true)
-    const dates = [...selectedDates].sort()
-    const slotKeys: string[] = []; const gridData: Record<string, string[]> = {}
-    dates.forEach(ds => { const s = timeGrid[ds]; gridData[ds] = s ? [...s].sort() : []; if (!s || s.size === 0) slotKeys.push(ds + '_allday'); else [...s].sort().forEach(t => slotKeys.push(ds + '_' + t)) })
-    const poll = await createPoll({ user_id: user.id, title: title.trim(), description: desc.trim() || null, duration, location: location.trim() || null, timezone, dates, slot_keys: slotKeys, grid_data: gridData })
-    if (poll) router.push(`/poll/${poll.id}`)
-    else { alert('Failed to create poll.'); setSaving(false) }
-  }
-
-  // Check if returning from login with pending poll
   useEffect(() => {
-    const pending = sessionStorage.getItem('rv_pending_poll')
-    if (!pending) return
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return
-      try {
-        const form = JSON.parse(pending)
-        sessionStorage.removeItem('rv_pending_poll')
-        const dates = form.dates.sort()
-        const tg: Record<string, Set<string>> = {}
-        Object.entries(form.timeGrid).forEach(([k, v]) => { tg[k] = new Set(v as string[]) })
-        const slotKeys: string[] = []; const gridData: Record<string, string[]> = {}
-        dates.forEach((ds: string) => { const s = tg[ds]; gridData[ds] = s ? [...s].sort() : []; if (!s || s.size === 0) slotKeys.push(ds + '_allday'); else [...s].sort().forEach(t => slotKeys.push(ds + '_' + t)) })
-        const poll = await createPoll({ user_id: user.id, title: form.title, description: form.desc || null, duration: form.duration, location: form.location || null, timezone: form.timezone, dates, slot_keys: slotKeys, grid_data: gridData })
-        if (poll) router.push(`/poll/${poll.id}`)
-      } catch {}
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) { router.push('/login'); return }
+      setUser(user)
+      getMyPolls().then(p => { setPolls(p); setLoading(false) })
     })
   }, [router])
 
-  const sortedDates = [...selectedDates].sort()
-  const slots = getSlots()
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation()
+    if (!confirm('Delete this poll?')) return
+    await deletePoll(id)
+    setPolls(prev => prev.filter(p => p.id !== id))
+  }
+
+  const fmtDate = (ds: string) => new Date(ds + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+
+  if (!user || loading) return <div className="app"><p style={{ textAlign: 'center', padding: 80, color: 'var(--ink-muted)' }}>Loading...</p></div>
 
   return (
     <div className="app">
       <div className="page-header">
-        <h1>Create Your Poll</h1>
-        <p>Set up your event, pick dates, paint time slots, and share across time zones. Free to use.</p>
+        <h1>My Polls</h1>
+        <p>Welcome back! Here are your polls. Only you can see these.</p>
       </div>
-      <div className="card" style={{ marginBottom: 24 }}>
-        <div className="form-group"><label>Event Title</label><input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Team Offsite Planning" /></div>
-        <div className="form-group"><label>Description (optional)</label><textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Add details..." /></div>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <div className="form-group" style={{ flex: 1, minWidth: 180 }}><label>Duration</label><select value={duration} onChange={e => setDuration(e.target.value)}><option value="30">30 min</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option><option value="0">Full day</option></select></div>
-          <div className="form-group" style={{ flex: 1, minWidth: 180 }}><label>Location</label><input value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Zoom / Room 301" /></div>
+
+      <div style={{ marginBottom: 24 }}>
+        <Link href="/create" className="btn btn-primary">+ Create New Poll</Link>
+      </div>
+
+      {polls.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 60 }}>
+          <h2 style={{ fontFamily: "'Instrument Serif', serif", fontSize: 28, fontWeight: 400, color: 'var(--ink-soft)', marginBottom: 8 }}>No polls yet</h2>
+          <p style={{ color: 'var(--ink-muted)' }}>Create your first poll to get started!</p>
         </div>
-        <div className="form-group" style={{ marginBottom: 0 }}><label>🌐 Poll Timezone</label><select value={timezone} onChange={e => setTimezone(e.target.value)}>{TZ_LIST.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
-      </div>
-      <div className="card" style={{ marginBottom: 24 }}>
-        <span className="section-label">① Select Dates</span>
-        <div className="calendar-nav"><button className="btn btn-icon btn-secondary" onClick={() => changeMonth(-1)}>◀</button><h2>{MONTHS[month]} {year}</h2><button className="btn btn-icon btn-secondary" onClick={() => changeMonth(1)}>▶</button></div>
-        <div className="calendar-grid">
-          {DAYS.map(d => <div key={d} className="cal-day-header">{d}</div>)}
-          {calDays.map((d, i) => {
-            if (d === null) return <div key={`e${i}`} className="cal-day empty" />
-            const date = new Date(year, month, d); const key = dateKey(date); const isPast = date < today.current; const isToday = date.getTime() === today.current.getTime()
-            return <div key={key} className={`cal-day${isPast ? ' past' : ''}${isToday ? ' today' : ''}${selectedDates.has(key) ? ' selected' : ''}`} onClick={() => toggleDate(key, isPast)}>{d}</div>
-          })}
-        </div>
-        {selectedDates.size > 0 && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: 'var(--accent-light)', color: 'var(--accent)', fontSize: 13, fontWeight: 600, borderRadius: 20, marginTop: 16 }}>{selectedDates.size} date{selectedDates.size > 1 ? 's' : ''} selected</div>}
-      </div>
-      {selectedDates.size > 0 && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <span className="section-label">② Paint Time Slots</span>
-          <div className="time-presets">
-            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-soft)' }}>Quick fill:</span>
-            {['morning','afternoon','evening','business'].map(t => <button key={t} className="preset-btn" onClick={() => applyPreset(t)}>{t === 'morning' ? '🌅 Morning 8–12' : t === 'afternoon' ? '☀️ Afternoon 12–17' : t === 'evening' ? '🌙 Evening 17–21' : '💼 Business 9–17'}</button>)}
-            <button className="preset-btn" onClick={() => applyPreset('clear')}>✕ Clear</button>
-          </div>
-          <div className="tgrid-wrapper"><div className="tgrid" style={{ gridTemplateColumns: `140px repeat(${slots.length}, minmax(38px, 1fr))` }} onMouseUp={() => { dragRef.current = null }} onMouseLeave={() => { dragRef.current = null }}>
-            <div className="tgrid-header-cell" style={{ position: 'sticky', left: 0, zIndex: 3 }} />
-            {slots.map(t => <div key={t} className="tgrid-header-cell">{t}</div>)}
-            {sortedDates.map(ds => { const d = new Date(ds + 'T00:00:00'); return [
-              <div key={ds + '-l'} className="tgrid-date-label" style={{ position: 'sticky', left: 0, zIndex: 1 }}>{d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</div>,
-              ...slots.map(t => { const on = timeGrid[ds]?.has(t); return <div key={ds + t} className={`tgrid-cell${on ? ' on' : ''}`} onMouseDown={e => { e.preventDefault(); const mode = on ? 'off' : 'on'; dragRef.current = { mode }; toggleCell(ds, t, mode) }} onMouseEnter={() => { if (dragRef.current) toggleCell(ds, t, dragRef.current.mode) }} /> })
-            ] })}
-          </div></div>
-          <p style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 10 }}>💡 Click or drag to toggle slots.</p>
-          {sortedDates.length > 1 && <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12, padding: '12px 16px', background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)', fontSize: 13, color: 'var(--accent)', fontWeight: 500 }}><span>Copy first row to all →</span><button className="btn btn-sm btn-secondary" onClick={copyFirstToAll}>Apply to all</button></div>}
+      ) : (
+        <div className="dash-grid">
+          {polls.map(p => (
+            <Link href={`/poll/${p.id}`} key={p.id} className="dash-card" style={{ position: 'relative' }}>
+              <button className="btn btn-icon btn-ghost" onClick={(e) => handleDelete(p.id, e)}
+                style={{ position: 'absolute', top: 12, right: 12 }} title="Delete">🗑</button>
+              <div className="dash-card-title">{p.title}</div>
+              <div className="dash-card-meta">
+                <span>📅 {p.dates?.length ? `${fmtDate(p.dates[0])} – ${fmtDate(p.dates[p.dates.length - 1])}` : ''}</span>
+                <span>🌐 {getTzLabel(p.timezone)}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 16 }}>
+                <div><div className="dash-stat-num">{p.slot_keys?.length || 0}</div><div className="dash-stat-label">Slots</div></div>
+              </div>
+            </Link>
+          ))}
         </div>
       )}
-      <div className="step-footer"><div /><button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ padding: '14px 32px', fontSize: 16 }}>{saving ? 'Creating...' : 'Create Poll →'}</button></div>
     </div>
   )
 }
