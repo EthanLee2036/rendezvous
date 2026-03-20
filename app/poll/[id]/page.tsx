@@ -15,10 +15,12 @@ export default function PollPage() {
   const [notFound, setNotFound] = useState(false)
   const [tab, setTab] = useState<'vote' | 'results'>('vote')
   const [voterName, setVoterName] = useState('')
+  const [voterEmail, setVoterEmail] = useState('')
   const [voterTz, setVoterTz] = useState(findClosestTz(detectTimezone()))
   const [myVotes, setMyVotes] = useState<Record<string, VoteValue>>({})
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState('')
+  const hasVoted = Object.values(myVotes).some(v => v !== null)
 
   useEffect(() => {
     if (!id) return
@@ -32,25 +34,23 @@ export default function PollPage() {
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2500) }
   const splitKey = (k: string): [string, string] => { const i = k.lastIndexOf('_'); return [k.substring(0, i), k.substring(i + 1)] }
-
   const fmtConv = useCallback((ds: string, t: string) => {
     if (!poll || poll.timezone === voterTz || t === 'allday') return ''
     const c = convertTime(ds, t, poll.timezone, voterTz)
     if (c.date === ds) return c.time
     return c.time + ' ' + new Date(c.date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
   }, [poll, voterTz])
-
   const tzDiff = poll ? getTzOffset(voterTz) - getTzOffset(poll.timezone) : 0
   const cycleVote = (k: string) => { const o: VoteValue[] = [null, 'yes', 'maybe', 'no']; setMyVotes(prev => ({ ...prev, [k]: o[(o.indexOf(prev[k]) + 1) % o.length] })) }
 
   const handleSubmit = async () => {
     if (!poll) return
-    if (!voterName.trim()) return alert('Enter your name.')
-    if (!Object.values(myVotes).some(v => v !== null)) return alert('Vote on at least one slot.')
+    if (!voterName.trim()) return alert('Please enter your name.')
+    if (!hasVoted) return alert('Please vote on at least one slot.')
     setSubmitting(true)
     const choices: Record<string, string> = {}; for (const k in myVotes) choices[k] = myVotes[k] || 'no'
     const vote = await submitVoteApi({ poll_id: poll.id, voter_name: voterName.trim(), voter_timezone: voterTz, choices: choices as Record<string, 'yes' | 'maybe' | 'no'> })
-    if (vote) { setVotes(prev => [...prev, vote]); setVoterName(''); const init: Record<string, VoteValue> = {}; poll.slot_keys.forEach(k => init[k] = null); setMyVotes(init); setTab('results'); showToast('Vote submitted!') }
+    if (vote) { setVotes(prev => [...prev, vote]); setVoterName(''); setVoterEmail(''); const init: Record<string, VoteValue> = {}; poll.slot_keys.forEach(k => init[k] = null); setMyVotes(init); setTab('results'); showToast('Vote submitted!') }
     else alert('Failed to submit vote.')
     setSubmitting(false)
   }
@@ -74,7 +74,6 @@ export default function PollPage() {
   if (notFound || !poll) return <div className="app"><div style={{ textAlign: 'center', padding: 80 }}><h2 style={{ fontFamily: "'Instrument Serif', serif", fontSize: 28 }}>Poll not found</h2><p style={{ color: 'var(--ink-muted)', marginTop: 8 }}>Check the link and try again.</p></div></div>
 
   const showConv = poll.timezone !== voterTz
-
   const renderHeaders = () => poll.slot_keys.map(k => {
     const [ds, t] = splitKey(k); const d = new Date(ds + 'T00:00:00'); const conv = showConv ? fmtConv(ds, t) : ''
     return <th key={k}><div className="th-date">{d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', weekday: 'short' })}</div><div className="th-time">{t === 'allday' ? 'All day' : t}</div>{conv && <div className="th-converted">🕐 {conv}</div>}</th>
@@ -109,21 +108,48 @@ export default function PollPage() {
       </div>
 
       {tab === 'vote' && <>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20, padding: 16, background: 'var(--surface)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)' }}>
-          <input type="text" value={voterName} onChange={e => setVoterName(e.target.value)} placeholder="Your name" style={{ flex: 1, padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontFamily: 'inherit', fontSize: 14 }} />
-          <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={submitting}>{submitting ? 'Sending...' : 'Submit Vote'}</button>
-        </div>
         <div style={{ display: 'flex', gap: 16, marginBottom: 16, fontSize: 13, color: 'var(--ink-soft)', flexWrap: 'wrap' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: '50%', background: 'var(--yes-bg)', border: '2px solid var(--yes)', display: 'inline-block' }} /> Available</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: '50%', background: 'var(--maybe-bg)', border: '2px solid var(--maybe)', display: 'inline-block' }} /> Maybe</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: '50%', background: 'var(--no-bg)', border: '2px solid var(--no)', display: 'inline-block' }} /> Unavailable</span>
         </div>
+
         <div className="vote-table-wrapper"><table className="vote-table"><thead><tr><th style={{ textAlign: 'left' }}>Participant</th>{renderHeaders()}</tr></thead><tbody>
           {votes.map(v => <tr key={v.id}><td>{v.voter_name}</td>{poll.slot_keys.map(k => { const c = v.choices[k] || 'no'; return <td key={k}><div className={`vote-cell ${c}`}>{c === 'yes' ? '✓' : c === 'maybe' ? '?' : '✗'}</div></td> })}</tr>)}
-          <tr style={{ background: 'var(--accent-light)' }}><td style={{ background: 'var(--accent-light)', fontStyle: 'italic', color: 'var(--accent)' }}>Your vote</td>
+          <tr style={{ background: 'var(--accent-light)' }}>
+            <td style={{ background: 'var(--accent-light)', fontStyle: 'italic', color: 'var(--accent)', fontWeight: 500 }}>Your vote</td>
             {poll.slot_keys.map(k => <td key={k}><div className={`vote-cell ${myVotes[k] || ''}`} onClick={() => cycleVote(k)} style={{ cursor: 'pointer' }}>{myVotes[k] === 'yes' ? '✓' : myVotes[k] === 'maybe' ? '?' : myVotes[k] === 'no' ? '✗' : '·'}</div></td>)}
           </tr>
         </tbody></table></div>
+
+        <div className="card" style={{ marginTop: 24, transition: 'opacity 0.3s', opacity: hasVoted ? 1 : 0.5 }}>
+          <div style={{ textAlign: 'center', marginBottom: 20 }}>
+            <h2 style={{ fontFamily: "'Instrument Serif', serif", fontSize: 24, fontWeight: 400, marginBottom: 4 }}>
+              {hasVoted ? 'Almost done!' : 'Select your availability above'}
+            </h2>
+            <p style={{ fontSize: 13, color: 'var(--ink-muted)' }}>
+              {hasVoted ? 'Add your name and submit your vote.' : 'Click the circles in the table to indicate your availability.'}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', maxWidth: 500, margin: '0 auto' }}>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--ink-soft)', marginBottom: 6 }}>Name *</label>
+              <input type="text" value={voterName} onChange={e => setVoterName(e.target.value)} placeholder="Your name"
+                style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontFamily: 'inherit', fontSize: 14 }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--ink-soft)', marginBottom: 6 }}>Email <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: '0' }}>— optional</span></label>
+              <input type="email" value={voterEmail} onChange={e => setVoterEmail(e.target.value)} placeholder="Get notified when results are in"
+                style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontFamily: 'inherit', fontSize: 14 }} />
+            </div>
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 20 }}>
+            <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting || !hasVoted}
+              style={{ padding: '14px 48px', fontSize: 16, opacity: hasVoted ? 1 : 0.5 }}>
+              {submitting ? 'Submitting...' : 'Submit Vote'}
+            </button>
+          </div>
+        </div>
       </>}
 
       {tab === 'results' && <>
