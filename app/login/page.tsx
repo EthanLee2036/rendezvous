@@ -26,8 +26,7 @@ function LoginForm() {
     if (mode === 'register') {
       const { error: e } = await signUpWithEmail(email, password)
       if (e) { setError(e.message); setLoading(false); return }
-      setSuccess('Check your email for a confirmation link!')
-      setLoading(false)
+      router.push('/dashboard')
     } else {
       const { error: e } = await signInWithEmail(email, password)
       if (e) { setError(e.message); setLoading(false); return }
