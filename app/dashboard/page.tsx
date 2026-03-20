@@ -17,7 +17,7 @@ export default function DashboardPage() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { router.push('/login'); return }
       setUser(user)
-      getMyPolls().then(p => { setPolls(p); setLoading(false) })
+      getMyPolls().then(p => { setPolls(p.filter(poll => poll.user_id === user.id)); setLoading(false) })
     })
   }, [router])
 
