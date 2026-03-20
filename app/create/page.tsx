@@ -27,9 +27,9 @@ export default function CreatePage() {
   const [saving, setSaving] = useState(false)
   const dragRef = useRef<{ mode: 'on' | 'off' } | null>(null)
 
-  useEffect(() => {
+useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) { router.push('/login'); return }
+      if (!user) { router.push('/login?mode=register&redirect=create'); return }
       setUserId(user.id)
     })
   }, [router])
