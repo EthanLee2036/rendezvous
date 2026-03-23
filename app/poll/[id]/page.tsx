@@ -215,26 +215,31 @@ export default function PollPage() {
           </tbody><tfoot><tr><td style={{ textAlign: 'left', fontWeight: 600, fontSize: 13, color: 'var(--accent)' }}>Score</td>
             {poll.slot_keys.map(k => { const pct = Math.round(scores[k] / (votes.length * 2) * 100); return <td key={k} style={{ fontWeight: 600, fontSize: 13, color: 'var(--accent)' }}>{pct}%<div className="vote-bar"><div className="vote-bar-fill" style={{ width: pct + '%' }} /></div></td> })}
           </tr></tfoot></table></div>
-{bestKey && (() => {
+        {bestKey && (() => {
             const bestScore = scores[bestKey]
             const bestSlots = poll.slot_keys.filter(k => scores[k] === bestScore)
+            const grouped: Record<string, string[]> = {}
+            bestSlots.forEach(k => { const [ds, t] = splitKey(k); if (!grouped[ds]) grouped[ds] = []; grouped[ds].push(t) })
+            const days = Object.keys(grouped).sort()
             return (
               <div style={{ marginTop: 20, padding: 20, background: 'var(--yes-bg)', borderRadius: 'var(--radius)', border: '1px solid var(--yes)' }}>
-                <div style={{ fontWeight: 600, color: 'var(--yes)', fontSize: 15 }}>🎯 Best Time Slot{bestSlots.length > 1 ? 's' : ''}</div>
-                {bestSlots.map(k => {
-                  const [ds, t] = splitKey(k)
-                  const d = new Date(ds + 'T00:00:00')
-                  let txt = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
-                  if (t !== 'allday') txt += ' at ' + t
-                  if (showConv && t !== 'allday') { const c = convertTime(ds, t, poll.timezone, voterTz); txt += ` → ${c.time} your time` }
-                  return <div key={k} style={{ fontFamily: "'Instrument Serif', serif", fontSize: 20, marginTop: 6 }}>{txt}</div>
-                })}
+                <div style={{ fontWeight: 600, color: 'var(--yes)', fontSize: 15, marginBottom: 12 }}>🎯 Best Time{days.length > 1 ? 's' : ''} ({Math.round(bestScore / (votes.length * 2) * 100)}% match)</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {days.map(ds => {
+                    const d = new Date(ds + 'T00:00:00')
+                    const label = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+                    const times = grouped[ds].sort()
+                    return (
+                      <div key={ds} style={{ padding: '10px 16px', background: 'var(--surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--yes)', minWidth: 120 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--yes)', marginBottom: 4 }}>{label}</div>
+                        <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{times.map(t => t === 'allday' ? 'All day' : t).join(', ')}</div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )
           })()}
-          <button className="btn btn-secondary btn-sm" style={{ marginTop: 16 }} onClick={exportCSV}>📥 Export CSV</button>
-        </>}
-      </>}
 
       <div className="card" style={{ marginTop: 24 }}>
         <span className="section-label">Share this poll</span>
