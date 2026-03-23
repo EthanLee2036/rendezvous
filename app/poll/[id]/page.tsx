@@ -131,8 +131,8 @@ export default function PollPage() {
               <div key={k}>
                 {showHeader && (
                   <div style={{ padding: '14px 20px', background: 'var(--surface-hover)', borderBottom: '1px solid var(--border-light)', borderTop: i > 0 ? '2px solid var(--border)' : 'none' }}>
-                    <span style={{ fontFamily: "'Instrument Serif', serif", fontSize: 17, fontWeight: 400 }}>{dateLabel}</span>
-                    {showConv && <span style={{ fontSize: 11, color: 'var(--accent)', marginLeft: 10 }}>🕐 {fmtConv(ds, t)}</span>}
+                    <span style={{ fontFamily: "'Instrument Serif', serif", fontSize: 17, fontWeight: 400 }}>{showConv ? new Date(convertTime(ds, splitKey(poll.slot_keys.find(sk => splitKey(sk)[0] === ds)!)[1], poll.timezone, voterTz).date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : dateLabel}</span>
+                    {showConv && <span style={{ fontSize: 11, color: 'var(--ink-muted)', marginLeft: 10 }}>(poll time: {dateLabel})</span>}
                   </div>
                 )}
                 {showHeader && (
@@ -143,8 +143,7 @@ export default function PollPage() {
                       const skConv = showConv ? fmtConv(ds, skTime) : ''
                       return (
                         <div key={sk} onClick={() => cycleVote(sk)} className={`vote-pill ${skV || ''}`}>
-                          {skTime === 'allday' ? 'All day' : skTime}
-                          {skConv && <span style={{ fontSize: 11, opacity: 0.7 }}>({skConv})</span>}
+                          {skTime === 'allday' ? 'All day' : (skConv || skTime)}
                           {skV === 'yes' && <span style={{ fontSize: 13 }}>✓</span>}
                           {skV === 'maybe' && <span style={{ fontSize: 13 }}>?</span>}
                           {skV === 'no' && <span style={{ fontSize: 13 }}>✗</span>}
