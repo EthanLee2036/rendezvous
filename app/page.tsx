@@ -129,14 +129,27 @@ export default function HomePage() {
         </div>
         <div className="form-group" style={{ marginBottom: 0 }}><label>🌐 Poll Timezone</label><select value={timezone} onChange={e => setTimezone(e.target.value)}>{TZ_LIST.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
       </div>
-      <div className="card" style={{ marginBottom: 24 }}>
-        <span className="section-label">① Select Dates</span>
+<div className="card" style={{ marginBottom: 24 }}>
+        <span className="section-label">① Select Date Range</span>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 4 }}>From</label>
+            <input type="date" value={rangeStart} onChange={e => { setRangeStart(e.target.value); if (e.target.value) { const d = new Date(e.target.value); setMonth(d.getMonth()); setYear(d.getFullYear()) }}} style={{ padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-xs)', fontFamily: 'inherit', fontSize: 14 }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 4 }}>To</label>
+            <input type="date" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)} style={{ padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-xs)', fontFamily: 'inherit', fontSize: 14 }} />
+          </div>
+          {rangeStart && rangeEnd && <button className="btn btn-sm btn-ghost" onClick={() => { setRangeStart(''); setRangeEnd('') }} style={{ marginTop: 18 }}>Clear range</button>}
+        </div>
         <div className="calendar-nav"><button className="btn btn-icon btn-secondary" onClick={() => changeMonth(-1)}>◀</button><h2>{MONTHS[month]} {year}</h2><button className="btn btn-icon btn-secondary" onClick={() => changeMonth(1)}>▶</button></div>
         <div className="calendar-grid">
           {DAYS.map(d => <div key={d} className="cal-day-header">{d}</div>)}
           {calDays.map((d, i) => {
             if (d === null) return <div key={`e${i}`} className="cal-day empty" />
             const date = new Date(year, month, d); const key = dateKey(date); const isPast = date < today.current; const isToday = date.getTime() === today.current.getTime()
+            const outOfRange = (rangeStart && key < rangeStart) || (rangeEnd && key > rangeEnd)
+            if (outOfRange) return <div key={key} className="cal-day past">{d}</div>
             return <div key={key} className={`cal-day${isPast ? ' past' : ''}${isToday ? ' today' : ''}${selectedDates.has(key) ? ' selected' : ''}`} onClick={() => toggleDate(key, isPast)}>{d}</div>
           })}
         </div>
