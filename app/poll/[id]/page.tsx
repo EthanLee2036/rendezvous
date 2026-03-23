@@ -61,8 +61,8 @@ export default function PollPage() {
     const header = ['Participant', ...poll.slot_keys.map(k => { const [ds, t] = splitKey(k); return ds + ' ' + t })]
     let csv = header.join(',') + '\n'
     votes.forEach(v => { csv += `"${v.voter_name.replace(/"/g, '""')}",${poll.slot_keys.map(k => v.choices[k] || 'no').join(',')}\n` })
-    const s = poll.slot_keys.map(k => { let sc = 0; votes.forEach(v => { if (v.choices[k] === 'yes') sc += 2; else if (v.choices[k] === 'maybe') sc += 1 }); return Math.round(sc / (votes.length * 2) * 100) + '%' })
-    csv += 'Score,' + s.join(',') + '\n'
+    const sc = poll.slot_keys.map(k => { let s = 0; votes.forEach(v => { if (v.choices[k] === 'yes') s += 2; else if (v.choices[k] === 'maybe') s += 1 }); return Math.round(s / (votes.length * 2) * 100) + '%' })
+    csv += 'Score,' + sc.join(',') + '\n'
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `${poll.title.replace(/[^a-z0-9]/gi, '_')}_results.csv`; a.click()
     showToast('CSV downloaded!')
   }
@@ -79,6 +79,52 @@ export default function PollPage() {
     const [ds, t] = splitKey(k); const d = new Date(ds + 'T00:00:00'); const conv = showConv ? fmtConv(ds, t) : ''
     return <th key={k}><div className="th-date">{d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', weekday: 'short' })}</div><div className="th-time">{t === 'allday' ? 'All day' : t}</div>{conv && <div className="th-converted">🕐 {conv}</div>}</th>
   })
+
+  const renderHeatmap = () => {
+    const dateGroups: Record<string, string[]> = {}
+    poll.slot_keys.forEach(k => { const [ds, t] = splitKey(k); if (!dateGroups[ds]) dateGroups[ds] = []; dateGroups[ds].push(t) })
+    const hmDays = Object.keys(dateGroups).sort()
+    const hmTimes = [...new Set(poll.slot_keys.map(k => splitKey(k)[1]))].sort()
+    const getCount = (ds: string, t: string) => votes.filter(v => v.choices[ds + '_' + t] === 'yes').length
+    const total = votes.length
+    const cellColor = (count: number) => {
+      const ratio = count / total
+      if (ratio >= 0.6) return { bg: 'var(--yes-bg)', color: 'var(--yes)' }
+      if (ratio >= 0.3) return { bg: 'var(--maybe-bg)', color: 'var(--maybe)' }
+      return { bg: 'var(--no-bg)', color: 'var(--no)' }
+    }
+    return (
+      <div className="card" style={{ padding: 20, marginBottom: 20, overflowX: 'auto' }}>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Availability heatmap</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '80px repeat(' + hmDays.length + ', minmax(60px, 1fr))', gap: 3, fontSize: 13 }}>
+          <div />
+          {hmDays.map(ds => {
+            const d = new Date(ds + 'T00:00:00')
+            return <div key={ds} style={{ textAlign: 'center', padding: '6px 2px', fontWeight: 600, fontSize: 12 }}>{d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' })}</div>
+          })}
+          {hmTimes.flatMap(t => [
+            <div key={t + '-label'} style={{ padding: '8px 4px', color: 'var(--ink-soft)', fontSize: 12 }}>{t === 'allday' ? 'All day' : t}</div>,
+            ...hmDays.map(ds => {
+              const hasSlot = dateGroups[ds]?.includes(t)
+              if (!hasSlot) return <div key={ds + '-' + t} />
+              const count = getCount(ds, t)
+              const colors = cellColor(count)
+              return <div key={ds + '-' + t} style={{ background: colors.bg, color: colors.color, textAlign: 'center', padding: '8px 4px', borderRadius: 4, fontWeight: 600, fontSize: 12 }}>{count}/{total}</div>
+            })
+          ])}
+        </div>
+        <div style={{ display: 'flex', gap: 12, marginTop: 14, fontSize: 12, color: 'var(--ink-muted)', alignItems: 'center' }}>
+          <span>Fewer</span>
+          <div style={{ display: 'flex', gap: 2 }}>
+            <div style={{ width: 20, height: 10, background: 'var(--no-bg)', borderRadius: 2 }} />
+            <div style={{ width: 20, height: 10, background: 'var(--maybe-bg)', borderRadius: 2 }} />
+            <div style={{ width: 20, height: 10, background: 'var(--yes-bg)', borderRadius: 2 }} />
+          </div>
+          <span>More available</span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="app">
@@ -99,49 +145,51 @@ export default function PollPage() {
           {TZ_LIST.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
         <span className="tz-offset-badge" style={tzDiff !== 0 ? { background: tzDiff > 0 ? '#FFF5DC' : '#E8F0EB', color: tzDiff > 0 ? '#B8860B' : 'var(--accent)' } : {}}>
-          {tzDiff === 0 ? 'Same as poll' : `${tzDiff >= 0 ? '+' : ''}${tzDiff}h from poll`}
+          {tzDiff === 0 ? 'Same as poll' : (tzDiff >= 0 ? '+' : '') + tzDiff + 'h from poll'}
         </span>
       </div>
 
       <div className="tab-bar">
-        <button className={`tab-btn${tab === 'vote' ? ' active' : ''}`} onClick={() => setTab('vote')}>Vote</button>
-        <button className={`tab-btn${tab === 'results' ? ' active' : ''}`} onClick={() => setTab('results')}>Results ({votes.length})</button>
+        <button className={'tab-btn' + (tab === 'vote' ? ' active' : '')} onClick={() => setTab('vote')}>Vote</button>
+        <button className={'tab-btn' + (tab === 'results' ? ' active' : '')} onClick={() => setTab('results')}>Results ({votes.length})</button>
       </div>
 
-      {tab === 'vote' && <>
-        <div style={{ display: 'flex', gap: 16, marginBottom: 16, fontSize: 13, color: 'var(--ink-soft)', flexWrap: 'wrap' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>Click to cycle:</span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 20, background: 'var(--yes-bg)', color: 'var(--yes)', fontSize: 12, fontWeight: 600, border: '1.5px solid var(--yes)' }}>Available ✓</span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 20, background: 'var(--maybe-bg)', color: 'var(--maybe)', fontSize: 12, fontWeight: 600, border: '1.5px solid var(--maybe)' }}>Maybe ?</span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 20, background: 'var(--no-bg)', color: 'var(--no)', fontSize: 12, fontWeight: 600, border: '1.5px solid var(--no)' }}>Unavailable ✗</span>
-        </div>
+      {tab === 'vote' && (
+        <div>
+          <div style={{ display: 'flex', gap: 16, marginBottom: 16, fontSize: 13, color: 'var(--ink-soft)', flexWrap: 'wrap' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>Click to cycle:</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 20, background: 'var(--yes-bg)', color: 'var(--yes)', fontSize: 12, fontWeight: 600, border: '1.5px solid var(--yes)' }}>Available ✓</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 20, background: 'var(--maybe-bg)', color: 'var(--maybe)', fontSize: 12, fontWeight: 600, border: '1.5px solid var(--maybe)' }}>Maybe ?</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 20, background: 'var(--no-bg)', color: 'var(--no)', fontSize: 12, fontWeight: 600, border: '1.5px solid var(--no)' }}>Unavailable ✗</span>
+          </div>
 
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          {poll.slot_keys.map((k, i) => {
-            const [ds, t] = splitKey(k)
-            const d = new Date(ds + 'T00:00:00')
-            const dateLabel = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-            const prevDs = i > 0 ? splitKey(poll.slot_keys[i-1])[0] : ''
-            const showHeader = ds !== prevDs
-            const nextDs = i < poll.slot_keys.length - 1 ? splitKey(poll.slot_keys[i+1])[0] : ''
-            const isLastInGroup = ds !== nextDs
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            {poll.slot_keys.map((k, i) => {
+              const [ds] = splitKey(k)
+              const d = new Date(ds + 'T00:00:00')
+              const dateLabel = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+              const prevDs = i > 0 ? splitKey(poll.slot_keys[i - 1])[0] : ''
+              const showHeader = ds !== prevDs
+              const nextDs = i < poll.slot_keys.length - 1 ? splitKey(poll.slot_keys[i + 1])[0] : ''
+              const isLastInGroup = ds !== nextDs
 
-            return (
-              <div key={k}>
-                {showHeader && (
+              if (!showHeader) return null
+
+              return (
+                <div key={ds}>
                   <div style={{ padding: '14px 20px', background: 'var(--surface-hover)', borderBottom: '1px solid var(--border-light)', borderTop: i > 0 ? '2px solid var(--border)' : 'none' }}>
-                    <span style={{ fontFamily: "'Instrument Serif', serif", fontSize: 17, fontWeight: 400 }}>{showConv ? new Date(convertTime(ds, splitKey(poll.slot_keys.find(sk => splitKey(sk)[0] === ds)!)[1], poll.timezone, voterTz).date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : dateLabel}</span>
+                    <span style={{ fontFamily: "'Instrument Serif', serif", fontSize: 17, fontWeight: 400 }}>
+                      {showConv ? new Date(convertTime(ds, splitKey(poll.slot_keys.find(sk => splitKey(sk)[0] === ds)!)[1], poll.timezone, voterTz).date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : dateLabel}
+                    </span>
                     {showConv && <span style={{ fontSize: 11, color: 'var(--ink-muted)', marginLeft: 10 }}>(poll time: {dateLabel})</span>}
                   </div>
-                )}
-                {showHeader && (
                   <div style={{ padding: '12px 20px', display: 'flex', flexWrap: 'wrap', gap: 8, paddingBottom: isLastInGroup ? 16 : 0 }}>
                     {poll.slot_keys.filter(sk => splitKey(sk)[0] === ds).map(sk => {
                       const skTime = splitKey(sk)[1]
                       const skV = myVotes[sk]
                       const skConv = showConv ? fmtConv(ds, skTime) : ''
                       return (
-                        <div key={sk} onClick={() => cycleVote(sk)} className={`vote-pill ${skV || ''}`}>
+                        <div key={sk} onClick={() => cycleVote(sk)} className={'vote-pill ' + (skV || '')}>
                           {skTime === 'allday' ? 'All day' : (() => {
                             const display = skConv || skTime
                             const dur = parseInt(poll.duration)
@@ -150,7 +198,7 @@ export default function PollPage() {
                             const endMin = h * 60 + m + dur
                             const endH = Math.floor(endMin / 60) % 24
                             const endM = endMin % 60
-                            return `${display}–${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`
+                            return display + '–' + String(endH).padStart(2, '0') + ':' + String(endM).padStart(2, '0')
                           })()}
                           {skV === 'yes' && <span style={{ fontSize: 13 }}>✓</span>}
                           {skV === 'maybe' && <span style={{ fontSize: 13 }}>?</span>}
@@ -159,154 +207,136 @@ export default function PollPage() {
                       )
                     })}
                   </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-
-        {votes.length > 0 && (
-          <div className="card" style={{ marginTop: 16, padding: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 12 }}>{votes.length} vote{votes.length > 1 ? 's' : ''} so far</div>
-            {votes.map(v => (
-              <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border-light)' }}>
-                <span style={{ fontSize: 14, fontWeight: 500, flex: 1 }}>{v.voter_name}</span>
-                <span style={{ fontSize: 12, color: 'var(--yes)' }}>{Object.values(v.choices).filter(c => c === 'yes').length} ✓</span>
-                <span style={{ fontSize: 12, color: 'var(--maybe)' }}>{Object.values(v.choices).filter(c => c === 'maybe').length} ?</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="card" style={{ marginTop: 24, transition: 'opacity 0.3s', opacity: hasVoted ? 1 : 0.5 }}>
-          <div style={{ textAlign: 'center', marginBottom: 20 }}>
-            <h2 style={{ fontFamily: "'Instrument Serif', serif", fontSize: 24, fontWeight: 400, marginBottom: 4 }}>
-              {hasVoted ? 'Almost done!' : 'Tap the time slots above'}
-            </h2>
-            <p style={{ fontSize: 13, color: 'var(--ink-muted)' }}>
-              {hasVoted ? 'Add your name and submit your vote.' : 'Click each time to mark your availability.'}
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', maxWidth: 500, margin: '0 auto' }}>
-            <div style={{ flex: 1, minWidth: 180 }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--ink-soft)', marginBottom: 6 }}>Name *</label>
-              <input type="text" value={voterName} onChange={e => setVoterName(e.target.value)} placeholder="Your name"
-                style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontFamily: 'inherit', fontSize: 14 }} />
-            </div>
-            <div style={{ flex: 1, minWidth: 180 }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--ink-soft)', marginBottom: 6 }}>Email <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: '0' }}>— optional</span></label>
-              <input type="email" value={voterEmail} onChange={e => setVoterEmail(e.target.value)} placeholder="Get notified when results are in"
-                style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontFamily: 'inherit', fontSize: 14 }} />
-            </div>
-          </div>
-          <div style={{ textAlign: 'center', marginTop: 20 }}>
-            <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting || !hasVoted}
-              style={{ padding: '14px 48px', fontSize: 16, opacity: hasVoted ? 1 : 0.5 }}>
-              {submitting ? 'Submitting...' : 'Submit Vote'}
-            </button>
-            <p style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 10 }}>Already voted? Submit again with the same name to update your vote.</p>
-          </div>
-        </div>
-      </>}
-
-      {tab === 'results' && <>
-        {votes.length > 0 && (() => {
-          const dateGroups: Record<string, string[]> = {}
-          poll.slot_keys.forEach(k => { const [ds, t] = splitKey(k); if (!dateGroups[ds]) dateGroups[ds] = []; dateGroups[ds].push(t) })
-          const days = Object.keys(dateGroups).sort()
-          const times = [...new Set(poll.slot_keys.map(k => splitKey(k)[1]))].sort()
-          const getCount = (ds: string, t: string) => {
-            const k = ds + '_' + t
-            return votes.filter(v => v.choices[k] === 'yes').length
-          }
-          const total = votes.length
-          const cellColor = (count: number) => {
-            const ratio = count / total
-            if (ratio >= 0.6) return { bg: 'var(--yes-bg)', color: 'var(--yes)' }
-            if (ratio >= 0.3) return { bg: 'var(--maybe-bg)', color: 'var(--maybe)' }
-            return { bg: 'var(--no-bg)', color: 'var(--no)' }
-          }
-          return (
-            <div className="card" style={{ padding: 20, marginBottom: 20, overflowX: 'auto' }}>
-              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Availability heatmap</div>
-              <div style={{ display: 'grid', gridTemplateColumns: `80px repeat(${days.length}, minmax(60px, 1fr))`, gap: 3, fontSize: 13 }}>
-                <div />
-                {days.map(ds => {
-                  const d = new Date(ds + 'T00:00:00')
-                  return <div key={ds} style={{ textAlign: 'center', padding: '6px 2px', fontWeight: 600, fontSize: 12 }}>{d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' })}</div>
-                })}
-                {times.flatMap(t => [
-                    <div key={t + '-label'} style={{ padding: '8px 4px', color: 'var(--ink-soft)', fontSize: 12 }}>{t === 'allday' ? 'All day' : t}</div>,
-                    ...days.map(ds => {
-                      const hasSlot = dateGroups[ds]?.includes(t)
-                      if (!hasSlot) return <div key={ds + t} />
-                      const count = getCount(ds, t)
-                      const colors = cellColor(count)
-                      return <div key={ds + t} style={{ background: colors.bg, color: colors.color, textAlign: 'center', padding: '8px 4px', borderRadius: 4, fontWeight: 600, fontSize: 12 }}>{count}/{total}</div>
-                    })
-                ])}
-                      const hasSlot = dateGroups[ds]?.includes(t)
-                      if (!hasSlot) return <div key={ds + t} />
-                      const count = getCount(ds, t)
-                      const colors = cellColor(count)
-                      return <div key={ds + t} style={{ background: colors.bg, color: colors.color, textAlign: 'center', padding: '8px 4px', borderRadius: 4, fontWeight: 600, fontSize: 12 }}>{count}/{total}</div>
-                    })
-                  ]
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 12, marginTop: 14, fontSize: 12, color: 'var(--ink-muted)', alignItems: 'center' }}>
-                <span>Fewer</span>
-                <div style={{ display: 'flex', gap: 2 }}>
-                  <div style={{ width: 20, height: 10, background: 'var(--no-bg)', borderRadius: 2 }} />
-                  <div style={{ width: 20, height: 10, background: 'var(--maybe-bg)', borderRadius: 2 }} />
-                  <div style={{ width: 20, height: 10, background: 'var(--yes-bg)', borderRadius: 2 }} />
                 </div>
-                <span>More available</span>
+              )
+            })}
+          </div>
+
+          {votes.length > 0 && (
+            <div className="card" style={{ marginTop: 16, padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 12 }}>{votes.length} vote{votes.length > 1 ? 's' : ''} so far</div>
+              {votes.map(v => (
+                <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border-light)' }}>
+                  <span style={{ fontSize: 14, fontWeight: 500, flex: 1 }}>{v.voter_name}</span>
+                  <span style={{ fontSize: 12, color: 'var(--yes)' }}>{Object.values(v.choices).filter(c => c === 'yes').length} ✓</span>
+                  <span style={{ fontSize: 12, color: 'var(--maybe)' }}>{Object.values(v.choices).filter(c => c === 'maybe').length} ?</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="card" style={{ marginTop: 24, transition: 'opacity 0.3s', opacity: hasVoted ? 1 : 0.5 }}>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <h2 style={{ fontFamily: "'Instrument Serif', serif", fontSize: 24, fontWeight: 400, marginBottom: 4 }}>
+                {hasVoted ? 'Almost done!' : 'Tap the time slots above'}
+              </h2>
+              <p style={{ fontSize: 13, color: 'var(--ink-muted)' }}>
+                {hasVoted ? 'Add your name and submit your vote.' : 'Click each time to mark your availability.'}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', maxWidth: 500, margin: '0 auto' }}>
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--ink-soft)', marginBottom: 6 }}>Name *</label>
+                <input type="text" value={voterName} onChange={e => setVoterName(e.target.value)} placeholder="Your name"
+                  style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontFamily: 'inherit', fontSize: 14 }} />
+              </div>
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--ink-soft)', marginBottom: 6 }}>Email <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: '0' }}>— optional</span></label>
+                <input type="email" value={voterEmail} onChange={e => setVoterEmail(e.target.value)} placeholder="Get notified when results are in"
+                  style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontFamily: 'inherit', fontSize: 14 }} />
               </div>
             </div>
-          )
-        })()}
-        {votes.length === 0 ? <p style={{ textAlign: 'center', padding: 40, color: 'var(--ink-muted)' }}>No votes yet.</p> : <>
-          <div className="vote-table-wrapper"><table className="vote-table"><thead><tr><th style={{ textAlign: 'left' }}>Participant</th>{renderHeaders()}</tr></thead><tbody>
-            {votes.map(v => <tr key={v.id}><td>{v.voter_name}</td>{poll.slot_keys.map(k => { const c = v.choices[k] || 'no'; return <td key={k}><div className={`vote-cell ${c}`} style={{ cursor: 'default' }}>{c === 'yes' ? '✓' : c === 'maybe' ? '?' : '✗'}</div></td> })}</tr>)}
-          </tbody><tfoot><tr><td style={{ textAlign: 'left', fontWeight: 600, fontSize: 13, color: 'var(--accent)' }}>Score</td>
-            {poll.slot_keys.map(k => { const pct = Math.round(scores[k] / (votes.length * 2) * 100); return <td key={k} style={{ fontWeight: 600, fontSize: 13, color: 'var(--accent)' }}>{pct}%<div className="vote-bar"><div className="vote-bar-fill" style={{ width: pct + '%' }} /></div></td> })}
-          </tr></tfoot></table></div>
-          {bestKey && (() => {
-            const bestScore = scores[bestKey]
-            const bestSlots = poll.slot_keys.filter(k => scores[k] === bestScore)
-            const grouped: Record<string, string[]> = {}
-            bestSlots.forEach(k => { const [ds, t] = splitKey(k); if (!grouped[ds]) grouped[ds] = []; grouped[ds].push(t) })
-            const bDays = Object.keys(grouped).sort()
-            return (
-              <div style={{ marginTop: 20, padding: 20, background: 'var(--yes-bg)', borderRadius: 'var(--radius)', border: '1px solid var(--yes)' }}>
-                <div style={{ fontWeight: 600, color: 'var(--yes)', fontSize: 15, marginBottom: 12 }}>🎯 Best Time{bDays.length > 1 ? 's' : ''} ({Math.round(bestScore / (votes.length * 2) * 100)}% match)</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {bDays.map(ds => {
-                    const d = new Date(ds + 'T00:00:00')
-                    const label = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-                    const bTimes = grouped[ds].sort()
-                    return (
-                      <div key={ds} style={{ padding: '10px 16px', background: 'var(--surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--yes)', minWidth: 120 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--yes)', marginBottom: 4 }}>{label}</div>
-                        <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{bTimes.map(t => t === 'allday' ? 'All day' : t).join(', ')}</div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })()}
-          <button className="btn btn-secondary btn-sm" style={{ marginTop: 16 }} onClick={exportCSV}>📥 Export CSV</button>
-        </>}
-      </>}
+            <div style={{ textAlign: 'center', marginTop: 20 }}>
+              <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting || !hasVoted}
+                style={{ padding: '14px 48px', fontSize: 16, opacity: hasVoted ? 1 : 0.5 }}>
+                {submitting ? 'Submitting...' : 'Submit Vote'}
+              </button>
+              <p style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 10 }}>Already voted? Submit again with the same name to update your vote.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* Share section */}
+      {tab === 'results' && (
+        <div>
+          {votes.length > 0 && renderHeatmap()}
+          {votes.length === 0 ? (
+            <p style={{ textAlign: 'center', padding: 40, color: 'var(--ink-muted)' }}>No votes yet.</p>
+          ) : (
+            <div>
+              <div className="vote-table-wrapper">
+                <table className="vote-table">
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left' }}>Participant</th>
+                      {renderHeaders()}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {votes.map(v => (
+                      <tr key={v.id}>
+                        <td>{v.voter_name}</td>
+                        {poll.slot_keys.map(k => {
+                          const c = v.choices[k] || 'no'
+                          return <td key={k}><div className={'vote-cell ' + c} style={{ cursor: 'default' }}>{c === 'yes' ? '✓' : c === 'maybe' ? '?' : '✗'}</div></td>
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td style={{ textAlign: 'left', fontWeight: 600, fontSize: 13, color: 'var(--accent)' }}>Score</td>
+                      {poll.slot_keys.map(k => {
+                        const pct = Math.round(scores[k] / (votes.length * 2) * 100)
+                        return (
+                          <td key={k} style={{ fontWeight: 600, fontSize: 13, color: 'var(--accent)' }}>
+                            {pct}%
+                            <div className="vote-bar"><div className="vote-bar-fill" style={{ width: pct + '%' }} /></div>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {bestKey && (() => {
+                const bestScore = scores[bestKey]
+                const bestSlots = poll.slot_keys.filter(k => scores[k] === bestScore)
+                const grouped: Record<string, string[]> = {}
+                bestSlots.forEach(k => { const [ds, t] = splitKey(k); if (!grouped[ds]) grouped[ds] = []; grouped[ds].push(t) })
+                const bDays = Object.keys(grouped).sort()
+                return (
+                  <div style={{ marginTop: 20, padding: 20, background: 'var(--yes-bg)', borderRadius: 'var(--radius)', border: '1px solid var(--yes)' }}>
+                    <div style={{ fontWeight: 600, color: 'var(--yes)', fontSize: 15, marginBottom: 12 }}>🎯 Best Time{bDays.length > 1 ? 's' : ''} ({Math.round(bestScore / (votes.length * 2) * 100)}% match)</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {bDays.map(ds => {
+                        const d = new Date(ds + 'T00:00:00')
+                        const label = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+                        const bTimes = grouped[ds].sort()
+                        return (
+                          <div key={ds} style={{ padding: '10px 16px', background: 'var(--surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--yes)', minWidth: 120 }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--yes)', marginBottom: 4 }}>{label}</div>
+                            <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{bTimes.map(t => t === 'allday' ? 'All day' : t).join(', ')}</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
+
+              <button className="btn btn-secondary btn-sm" style={{ marginTop: 16 }} onClick={exportCSV}>📥 Export CSV</button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="card" style={{ marginTop: 24 }}>
         <span className="section-label">Share this poll</span>
         {poll.deadline && (
           <div style={{ padding: '10px 16px', background: new Date(poll.deadline) < new Date() ? 'var(--no-bg)' : 'var(--maybe-bg)', borderRadius: 'var(--radius-sm)', marginBottom: 14, fontSize: 13, fontWeight: 600, color: new Date(poll.deadline) < new Date() ? 'var(--no)' : 'var(--maybe)' }}>
-            {new Date(poll.deadline) < new Date() ? '⛔ Voting is closed' : `⏰ Deadline: ${new Date(poll.deadline).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`}
+            {new Date(poll.deadline) < new Date() ? '⛔ Voting is closed' : '⏰ Deadline: ' + new Date(poll.deadline).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
           </div>
         )}
         <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 }}>Send this link — anyone can vote without signing up.</p>
@@ -316,13 +346,13 @@ export default function PollPage() {
           <button className="btn btn-sm btn-primary" onClick={() => { navigator.clipboard.writeText(window.location.href); showToast('Link copied!') }}>Copy</button>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-          <a href={`https://wa.me/?text=${encodeURIComponent(poll.title + ' — Vote here: ' + (typeof window !== 'undefined' ? window.location.href : ''))}`} target="_blank" rel="noopener" className="btn btn-sm btn-secondary" style={{ background: '#25D366', color: '#fff', border: 'none' }}>WhatsApp</a>
-          <a href={`https://t.me/share/url?url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}&text=${encodeURIComponent(poll.title + ' — Vote for the best time!')}`} target="_blank" rel="noopener" className="btn btn-sm btn-secondary" style={{ background: '#0088cc', color: '#fff', border: 'none' }}>Telegram</a>
-          <a href={`mailto:?subject=${encodeURIComponent(poll.title + ' — Vote for the best time')}&body=${encodeURIComponent('Please vote for the best time:\n\n' + (typeof window !== 'undefined' ? window.location.href : ''))}`} className="btn btn-sm btn-secondary">Email</a>
+          <a href={'https://wa.me/?text=' + encodeURIComponent(poll.title + ' — Vote here: ' + (typeof window !== 'undefined' ? window.location.href : ''))} target="_blank" rel="noopener" className="btn btn-sm btn-secondary" style={{ background: '#25D366', color: '#fff', border: 'none' }}>WhatsApp</a>
+          <a href={'https://t.me/share/url?url=' + encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '') + '&text=' + encodeURIComponent(poll.title + ' — Vote for the best time!')} target="_blank" rel="noopener" className="btn btn-sm btn-secondary" style={{ background: '#0088cc', color: '#fff', border: 'none' }}>Telegram</a>
+          <a href={'mailto:?subject=' + encodeURIComponent(poll.title + ' — Vote for the best time') + '&body=' + encodeURIComponent('Please vote for the best time:\n\n' + (typeof window !== 'undefined' ? window.location.href : ''))} className="btn btn-sm btn-secondary">Email</a>
           <button className="btn btn-sm btn-secondary" onClick={() => { if (navigator.share) navigator.share({ title: poll.title, text: 'Vote for the best time!', url: window.location.href }).catch(() => {}) }}>Share...</button>
         </div>
         <div style={{ textAlign: 'center' }}>
-          <img src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`} alt="QR Code" width="160" height="160" style={{ borderRadius: 8 }} />
+          <img src={'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' + encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')} alt="QR Code" width="160" height="160" style={{ borderRadius: 8 }} />
           <p style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 6 }}>Scan to vote</p>
         </div>
       </div>
