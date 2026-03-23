@@ -20,6 +20,8 @@ export default function HomePage() {
   const [timezone, setTimezone] = useState(detectedTz.current)
   const [month, setMonth] = useState(new Date().getMonth())
   const [year, setYear] = useState(new Date().getFullYear())
+  const [rangeStart, setRangeStart] = useState('')
+  const [rangeEnd, setRangeEnd] = useState('')
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
   const [timeGrid, setTimeGrid] = useState<Record<string, Set<string>>>({})
   const [interval, setInterval_] = useState(60)
