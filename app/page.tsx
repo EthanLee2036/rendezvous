@@ -25,6 +25,7 @@ export default function HomePage() {
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
   const [timeGrid, setTimeGrid] = useState<Record<string, Set<string>>>({})
   const [interval, setInterval_] = useState(60)
+  const [deadline, setDeadline] = useState('')
   const [saving, setSaving] = useState(false)
   const dragRef = useRef<{ mode: 'on' | 'off' } | null>(null)
 
