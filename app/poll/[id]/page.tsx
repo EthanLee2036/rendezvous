@@ -235,10 +235,16 @@ export default function PollPage() {
                   const d = new Date(ds + 'T00:00:00')
                   return <div key={ds} style={{ textAlign: 'center', padding: '6px 2px', fontWeight: 600, fontSize: 12 }}>{d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' })}</div>
                 })}
-                {times.map(t => (
-                  [
+                {times.flatMap(t => [
                     <div key={t + '-label'} style={{ padding: '8px 4px', color: 'var(--ink-soft)', fontSize: 12 }}>{t === 'allday' ? 'All day' : t}</div>,
                     ...days.map(ds => {
+                      const hasSlot = dateGroups[ds]?.includes(t)
+                      if (!hasSlot) return <div key={ds + t} />
+                      const count = getCount(ds, t)
+                      const colors = cellColor(count)
+                      return <div key={ds + t} style={{ background: colors.bg, color: colors.color, textAlign: 'center', padding: '8px 4px', borderRadius: 4, fontWeight: 600, fontSize: 12 }}>{count}/{total}</div>
+                    })
+                ])}
                       const hasSlot = dateGroups[ds]?.includes(t)
                       if (!hasSlot) return <div key={ds + t} />
                       const count = getCount(ds, t)
