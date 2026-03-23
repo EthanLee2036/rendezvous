@@ -114,21 +114,67 @@ export default function PollPage() {
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: '50%', background: 'var(--no-bg)', border: '2px solid var(--no)', display: 'inline-block' }} /> Unavailable</span>
         </div>
 
-        <div className="vote-table-wrapper"><table className="vote-table"><thead><tr><th style={{ textAlign: 'left' }}>Participant</th>{renderHeaders()}</tr></thead><tbody>
-          {votes.map(v => <tr key={v.id}><td>{v.voter_name}</td>{poll.slot_keys.map(k => { const c = v.choices[k] || 'no'; return <td key={k}><div className={`vote-cell ${c}`}>{c === 'yes' ? '✓' : c === 'maybe' ? '?' : '✗'}</div></td> })}</tr>)}
-          <tr style={{ background: 'var(--accent-light)' }}>
-            <td style={{ background: 'var(--accent-light)', fontStyle: 'italic', color: 'var(--accent)', fontWeight: 500 }}>Your vote</td>
-            {poll.slot_keys.map(k => <td key={k}><div className={`vote-cell ${myVotes[k] || ''}`} onClick={() => cycleVote(k)} style={{ cursor: 'pointer' }}>{myVotes[k] === 'yes' ? '✓' : myVotes[k] === 'maybe' ? '?' : myVotes[k] === 'no' ? '✗' : '·'}</div></td>)}
-          </tr>
-        </tbody></table></div>
+        {/* Vertical vote list */}
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          {poll.slot_keys.map((k, i) => {
+            const [ds, t] = splitKey(k)
+            const d = new Date(ds + 'T00:00:00')
+            const dateLabel = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+            const timeLabel = t === 'allday' ? 'All day' : t
+            const conv = showConv ? fmtConv(ds, t) : ''
+            const prevKey = i > 0 ? splitKey(poll.slot_keys[i-1])[0] : ''
+            const showDateHeader = ds !== prevKey
+            const v = myVotes[k]
 
+            return (
+              <div key={k}>
+                {showDateHeader && (
+                  <div style={{ padding: '12px 20px', background: '#FAFAF8', borderBottom: '1px solid var(--border-light)', borderTop: i > 0 ? '2px solid var(--border)' : 'none' }}>
+                    <div style={{ fontFamily: "'Instrument Serif', serif", fontSize: 18, fontWeight: 400 }}>{dateLabel}</div>
+                    {conv && <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 2 }}>🕐 Your timezone: {d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</div>}
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', padding: '10px 20px', borderBottom: '1px solid var(--border-light)', gap: 16 }}>
+                  <div style={{ flex: 1, minWidth: 80 }}>
+                    <span style={{ fontSize: 15, fontWeight: 500 }}>{timeLabel}</span>
+                    {conv && <span style={{ fontSize: 12, color: 'var(--accent)', marginLeft: 8 }}>🕐 {fmtConv(ds, t)}</span>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => setMyVotes(prev => ({ ...prev, [k]: prev[k] === 'yes' ? null : 'yes' }))}
+                      className={`vote-cell ${v === 'yes' ? 'yes' : ''}`} style={{ width: 44, height: 44, fontSize: 20, cursor: 'pointer' }}>✓</button>
+                    <button onClick={() => setMyVotes(prev => ({ ...prev, [k]: prev[k] === 'maybe' ? null : 'maybe' }))}
+                      className={`vote-cell ${v === 'maybe' ? 'maybe' : ''}`} style={{ width: 44, height: 44, fontSize: 20, cursor: 'pointer' }}>?</button>
+                    <button onClick={() => setMyVotes(prev => ({ ...prev, [k]: prev[k] === 'no' ? null : 'no' }))}
+                      className={`vote-cell ${v === 'no' ? 'no' : ''}`} style={{ width: 44, height: 44, fontSize: 20, cursor: 'pointer' }}>✗</button>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Previous voters */}
+        {votes.length > 0 && (
+          <div className="card" style={{ marginTop: 16, padding: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 12 }}>{votes.length} vote{votes.length > 1 ? 's' : ''} so far</div>
+            {votes.map(v => (
+              <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border-light)' }}>
+                <span style={{ fontSize: 14, fontWeight: 500, flex: 1 }}>{v.voter_name}</span>
+                <span style={{ fontSize: 12, color: 'var(--yes)' }}>{Object.values(v.choices).filter(c => c === 'yes').length} ✓</span>
+                <span style={{ fontSize: 12, color: 'var(--maybe)' }}>{Object.values(v.choices).filter(c => c === 'maybe').length} ?</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Submit card */}
         <div className="card" style={{ marginTop: 24, transition: 'opacity 0.3s', opacity: hasVoted ? 1 : 0.5 }}>
           <div style={{ textAlign: 'center', marginBottom: 20 }}>
             <h2 style={{ fontFamily: "'Instrument Serif', serif", fontSize: 24, fontWeight: 400, marginBottom: 4 }}>
               {hasVoted ? 'Almost done!' : 'Select your availability above'}
             </h2>
             <p style={{ fontSize: 13, color: 'var(--ink-muted)' }}>
-              {hasVoted ? 'Add your name and submit your vote.' : 'Click the circles in the table to indicate your availability.'}
+              {hasVoted ? 'Add your name and submit your vote.' : 'Click ✓, ? or ✗ for each time slot.'}
             </p>
           </div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', maxWidth: 500, margin: '0 auto' }}>
@@ -151,7 +197,6 @@ export default function PollPage() {
           </div>
         </div>
       </>}
-
       {tab === 'results' && <>
         {votes.length === 0 ? <p style={{ textAlign: 'center', padding: 40, color: 'var(--ink-muted)' }}>No votes yet.</p> : <>
           <div className="vote-table-wrapper"><table className="vote-table"><thead><tr><th style={{ textAlign: 'left' }}>Participant</th>{renderHeaders()}</tr></thead><tbody>
