@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { signInWithEmail, signUpWithEmail, signInWithGoogle, getUser } from '@/lib/supabase'
+import { signInWithEmail, signUpWithEmail, signInWithGoogle, getUser, supabase } from '@/lib/supabase'
 import { Suspense } from 'react'
 
 function LoginForm() {
@@ -63,10 +63,21 @@ function LoginForm() {
           <label>Email</label>
           <input type="email" value={email} onChange={e => { setEmail(e.target.value); setError('') }} placeholder="you@example.com" />
         </div>
-        <div className="form-group">
+<div className="form-group">
           <label>Password</label>
           <input type="password" value={password} onChange={e => { setPassword(e.target.value); setError('') }}
             onKeyDown={e => e.key === 'Enter' && handleSubmit()} placeholder="At least 6 characters" />
+          {mode === 'login' && (
+            <a onClick={async () => {
+              if (!email) { setError('Enter your email first.'); return }
+              setLoading(true); setError('')
+              const { error: e } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/login' })
+              if (e) { setError(e.message) } else { setSuccess('Password reset link sent to your email!') }
+              setLoading(false)
+            }} style={{ display: 'block', marginTop: 8, fontSize: 13, color: 'var(--accent)', cursor: 'pointer' }}>
+              Forgot password?
+            </a>
+          )}
         </div>
 
         {error && <p className="auth-error">{error}</p>}
