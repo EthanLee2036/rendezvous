@@ -127,16 +127,6 @@ export default function PollPage() {
             const conv = showConv ? fmtConv(ds, t) : ''
             const v = myVotes[k]
 
-            const pillStyle = (state: string | null) => ({
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              padding: '8px 16px', borderRadius: 20, cursor: 'pointer',
-              fontSize: 14, fontWeight: state ? 600 : 400,
-              border: `1.5px solid ${state === 'yes' ? 'var(--yes)' : state === 'maybe' ? 'var(--maybe)' : state === 'no' ? 'var(--no)' : 'var(--border)'}`,
-              background: state === 'yes' ? 'var(--yes-bg)' : state === 'maybe' ? 'var(--maybe-bg)' : state === 'no' ? 'var(--no-bg)' : 'var(--surface)',
-              color: state === 'yes' ? 'var(--yes)' : state === 'maybe' ? 'var(--maybe)' : state === 'no' ? 'var(--no)' : 'var(--ink)',
-              transition: 'all 0.15s',
-            })
-
             return (
               <div key={k}>
                 {showHeader && (
@@ -152,7 +142,7 @@ export default function PollPage() {
                       const skV = myVotes[sk]
                       const skConv = showConv ? fmtConv(ds, skTime) : ''
                       return (
-                        <div key={sk} onClick={() => cycleVote(sk)} style={pillStyle(skV)}>
+                        <div key={sk} onClick={() => cycleVote(sk)} className={`vote-pill ${skV || ''}`}>
                           {skTime === 'allday' ? 'All day' : skTime}
                           {skConv && <span style={{ fontSize: 11, opacity: 0.7 }}>({skConv})</span>}
                           {skV === 'yes' && <span style={{ fontSize: 13 }}>✓</span>}
