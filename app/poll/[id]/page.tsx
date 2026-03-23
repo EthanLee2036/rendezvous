@@ -209,6 +209,57 @@ export default function PollPage() {
         </div>
       </>}
       {tab === 'results' && <>
+        {tab === 'results' && <>
+        {votes.length > 0 && (() => {
+          const dateGroups: Record<string, string[]> = {}
+          poll.slot_keys.forEach(k => { const [ds, t] = splitKey(k); if (!dateGroups[ds]) dateGroups[ds] = []; dateGroups[ds].push(t) })
+          const days = Object.keys(dateGroups).sort()
+          const times = [...new Set(poll.slot_keys.map(k => splitKey(k)[1]))].sort()
+          const getCount = (ds: string, t: string) => {
+            const k = ds + '_' + t
+            return votes.filter(v => v.choices[k] === 'yes').length
+          }
+          const total = votes.length
+          const cellColor = (count: number) => {
+            const ratio = count / total
+            if (ratio >= 0.6) return { bg: 'var(--yes-bg)', color: 'var(--yes)' }
+            if (ratio >= 0.3) return { bg: 'var(--maybe-bg)', color: 'var(--maybe)' }
+            return { bg: 'var(--no-bg)', color: 'var(--no)' }
+          }
+          return (
+            <div className="card" style={{ padding: 20, marginBottom: 20, overflowX: 'auto' }}>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Availability heatmap</div>
+              <div style={{ display: 'grid', gridTemplateColumns: `80px repeat(${days.length}, minmax(60px, 1fr))`, gap: 3, fontSize: 13 }}>
+                <div />
+                {days.map(ds => {
+                  const d = new Date(ds + 'T00:00:00')
+                  return <div key={ds} style={{ textAlign: 'center', padding: '6px 2px', fontWeight: 600, fontSize: 12 }}>{d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' })}</div>
+                })}
+                {times.map(t => (
+                  [
+                    <div key={t + '-label'} style={{ padding: '8px 4px', color: 'var(--ink-soft)', fontSize: 12 }}>{t === 'allday' ? 'All day' : t}</div>,
+                    ...days.map(ds => {
+                      const hasSlot = dateGroups[ds]?.includes(t)
+                      if (!hasSlot) return <div key={ds + t} />
+                      const count = getCount(ds, t)
+                      const colors = cellColor(count)
+                      return <div key={ds + t} style={{ background: colors.bg, color: colors.color, textAlign: 'center', padding: '8px 4px', borderRadius: 4, fontWeight: 600, fontSize: 12 }}>{count}/{total}</div>
+                    })
+                  ]
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 12, marginTop: 14, fontSize: 12, color: 'var(--ink-muted)', alignItems: 'center' }}>
+                <span>Fewer</span>
+                <div style={{ display: 'flex', gap: 2 }}>
+                  <div style={{ width: 20, height: 10, background: 'var(--no-bg)', borderRadius: 2 }} />
+                  <div style={{ width: 20, height: 10, background: 'var(--maybe-bg)', borderRadius: 2 }} />
+                  <div style={{ width: 20, height: 10, background: 'var(--yes-bg)', borderRadius: 2 }} />
+                </div>
+                <span>More available</span>
+              </div>
+            </div>
+          )
+        })()}
         {votes.length === 0 ? <p style={{ textAlign: 'center', padding: 40, color: 'var(--ink-muted)' }}>No votes yet.</p> : <>
           <div className="vote-table-wrapper"><table className="vote-table"><thead><tr><th style={{ textAlign: 'left' }}>Participant</th>{renderHeaders()}</tr></thead><tbody>
             {votes.map(v => <tr key={v.id}><td>{v.voter_name}</td>{poll.slot_keys.map(k => { const c = v.choices[k] || 'no'; return <td key={k}><div className={`vote-cell ${c}`} style={{ cursor: 'default' }}>{c === 'yes' ? '✓' : c === 'maybe' ? '?' : '✗'}</div></td> })}</tr>)}
