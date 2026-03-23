@@ -128,10 +128,11 @@ a { color: inherit; text-decoration: none; }
 }
 /* Vote pills */
 .vote-pill {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 12px 24px; border-radius: 24px; cursor: pointer;
-  font-size: 16px; font-weight: 400; transition: all 0.15s;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 14px 32px; border-radius: 28px; cursor: pointer;
+  font-size: 17px; font-weight: 400; transition: all 0.15s;
   border: 2px solid var(--border); background: var(--surface); color: var(--ink);
+  min-width: 110px; text-align: center;
 }
 .vote-pill:hover { border-color: var(--ink-muted); transform: scale(1.03); }
 .vote-pill.yes { border-color: var(--yes); background: var(--yes-bg); color: var(--yes); font-weight: 600; }
