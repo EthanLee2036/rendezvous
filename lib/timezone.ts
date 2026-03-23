@@ -55,12 +55,19 @@ export function getTzLabel(v: string): string {
 }
 
 export function convertTime(dateStr: string, timeStr: string, fromTz: string, toTz: string) {
-  const diff = getTzOffset(toTz) - getTzOffset(fromTz)
-  const [h, m] = timeStr.split(':').map(Number)
-  let totalMin = h * 60 + m + diff * 60, dayShift = 0
-  if (totalMin < 0) { totalMin += 1440; dayShift = -1 }
-  if (totalMin >= 1440) { totalMin -= 1440; dayShift = 1 }
-  const d = new Date(dateStr + 'T00:00:00')
-  d.setDate(d.getDate() + dayShift)
-  return { date: d.toISOString().split('T')[0], time: String(Math.floor(totalMin / 60)).padStart(2, '0') + ':' + String(totalMin % 60).padStart(2, '0') }
+  try {
+    const [h, m] = timeStr.split(':').map(Number)
+    const fakeDate = new Date(`${dateStr}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`)
+    const fromStr = fakeDate.toLocaleString('en-US', { timeZone: fromTz })
+    const fromLocal = new Date(fromStr)
+    const toStr = fakeDate.toLocaleString('en-US', { timeZone: toTz })
+    const toLocal = new Date(toStr)
+    const diffMs = toLocal.getTime() - fromLocal.getTime()
+    const result = new Date(fakeDate.getTime() + diffMs)
+    const rH = result.getHours(), rM = result.getMinutes()
+    const rDate = `${result.getFullYear()}-${String(result.getMonth()+1).padStart(2,'0')}-${String(result.getDate()).padStart(2,'0')}`
+    return { date: rDate, time: String(rH).padStart(2,'0') + ':' + String(rM).padStart(2,'0') }
+  } catch {
+    return { date: dateStr, time: timeStr }
+  }
 }
