@@ -28,7 +28,7 @@ export default function HomePage() {
   const [saving, setSaving] = useState(false)
   const dragRef = useRef<{ mode: 'on' | 'off' } | null>(null)
 
-  const dateKey = (d: Date) => d.toISOString().split('T')[0]
+  const dateKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
   const changeMonth = (dir: number) => {
     let m = month + dir, y = year
     if (m > 11) { m = 0; y++ } if (m < 0) { m = 11; y-- }
