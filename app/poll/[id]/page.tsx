@@ -45,6 +45,7 @@ export default function PollPage() {
 
   const handleSubmit = async () => {
     if (!poll) return
+    if (poll.deadline && new Date(poll.deadline) < new Date()) return alert('Voting is closed. The deadline has passed.')
     if (!voterName.trim()) return alert('Please enter your name.')
     if (!hasVoted) return alert('Please vote on at least one slot.')
     setSubmitting(true)
@@ -60,8 +61,8 @@ export default function PollPage() {
     const header = ['Participant', ...poll.slot_keys.map(k => { const [ds, t] = splitKey(k); return ds + ' ' + t })]
     let csv = header.join(',') + '\n'
     votes.forEach(v => { csv += `"${v.voter_name.replace(/"/g, '""')}",${poll.slot_keys.map(k => v.choices[k] || 'no').join(',')}\n` })
-    const scores = poll.slot_keys.map(k => { let s = 0; votes.forEach(v => { if (v.choices[k] === 'yes') s += 2; else if (v.choices[k] === 'maybe') s += 1 }); return Math.round(s / (votes.length * 2) * 100) + '%' })
-    csv += 'Score,' + scores.join(',') + '\n'
+    const s = poll.slot_keys.map(k => { let sc = 0; votes.forEach(v => { if (v.choices[k] === 'yes') sc += 2; else if (v.choices[k] === 'maybe') sc += 1 }); return Math.round(sc / (votes.length * 2) * 100) + '%' })
+    csv += 'Score,' + s.join(',') + '\n'
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `${poll.title.replace(/[^a-z0-9]/gi, '_')}_results.csv`; a.click()
     showToast('CSV downloaded!')
   }
@@ -107,7 +108,7 @@ export default function PollPage() {
         <button className={`tab-btn${tab === 'results' ? ' active' : ''}`} onClick={() => setTab('results')}>Results ({votes.length})</button>
       </div>
 
-{tab === 'vote' && <>
+      {tab === 'vote' && <>
         <div style={{ display: 'flex', gap: 16, marginBottom: 16, fontSize: 13, color: 'var(--ink-soft)', flexWrap: 'wrap' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>Click to cycle:</span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 20, background: 'var(--yes-bg)', color: 'var(--yes)', fontSize: 12, fontWeight: 600, border: '1.5px solid var(--yes)' }}>Available ✓</span>
@@ -124,8 +125,6 @@ export default function PollPage() {
             const showHeader = ds !== prevDs
             const nextDs = i < poll.slot_keys.length - 1 ? splitKey(poll.slot_keys[i+1])[0] : ''
             const isLastInGroup = ds !== nextDs
-            const conv = showConv ? fmtConv(ds, t) : ''
-            const v = myVotes[k]
 
             return (
               <div key={k}>
@@ -205,11 +204,12 @@ export default function PollPage() {
               style={{ padding: '14px 48px', fontSize: 16, opacity: hasVoted ? 1 : 0.5 }}>
               {submitting ? 'Submitting...' : 'Submit Vote'}
             </button>
+            <p style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 10 }}>Already voted? Submit again with the same name to update your vote.</p>
           </div>
         </div>
       </>}
+
       {tab === 'results' && <>
-        {tab === 'results' && <>
         {votes.length > 0 && (() => {
           const dateGroups: Record<string, string[]> = {}
           poll.slot_keys.forEach(k => { const [ds, t] = splitKey(k); if (!dateGroups[ds]) dateGroups[ds] = []; dateGroups[ds].push(t) })
@@ -266,24 +266,24 @@ export default function PollPage() {
           </tbody><tfoot><tr><td style={{ textAlign: 'left', fontWeight: 600, fontSize: 13, color: 'var(--accent)' }}>Score</td>
             {poll.slot_keys.map(k => { const pct = Math.round(scores[k] / (votes.length * 2) * 100); return <td key={k} style={{ fontWeight: 600, fontSize: 13, color: 'var(--accent)' }}>{pct}%<div className="vote-bar"><div className="vote-bar-fill" style={{ width: pct + '%' }} /></div></td> })}
           </tr></tfoot></table></div>
-        {bestKey && (() => {
+          {bestKey && (() => {
             const bestScore = scores[bestKey]
             const bestSlots = poll.slot_keys.filter(k => scores[k] === bestScore)
             const grouped: Record<string, string[]> = {}
             bestSlots.forEach(k => { const [ds, t] = splitKey(k); if (!grouped[ds]) grouped[ds] = []; grouped[ds].push(t) })
-            const days = Object.keys(grouped).sort()
+            const bDays = Object.keys(grouped).sort()
             return (
               <div style={{ marginTop: 20, padding: 20, background: 'var(--yes-bg)', borderRadius: 'var(--radius)', border: '1px solid var(--yes)' }}>
-                <div style={{ fontWeight: 600, color: 'var(--yes)', fontSize: 15, marginBottom: 12 }}>🎯 Best Time{days.length > 1 ? 's' : ''} ({Math.round(bestScore / (votes.length * 2) * 100)}% match)</div>
+                <div style={{ fontWeight: 600, color: 'var(--yes)', fontSize: 15, marginBottom: 12 }}>🎯 Best Time{bDays.length > 1 ? 's' : ''} ({Math.round(bestScore / (votes.length * 2) * 100)}% match)</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {days.map(ds => {
+                  {bDays.map(ds => {
                     const d = new Date(ds + 'T00:00:00')
                     const label = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-                    const times = grouped[ds].sort()
+                    const bTimes = grouped[ds].sort()
                     return (
                       <div key={ds} style={{ padding: '10px 16px', background: 'var(--surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--yes)', minWidth: 120 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--yes)', marginBottom: 4 }}>{label}</div>
-                        <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{times.map(t => t === 'allday' ? 'All day' : t).join(', ')}</div>
+                        <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{bTimes.map(t => t === 'allday' ? 'All day' : t).join(', ')}</div>
                       </div>
                     )
                   })}
@@ -291,14 +291,33 @@ export default function PollPage() {
               </div>
             )
           })()}
+          <button className="btn btn-secondary btn-sm" style={{ marginTop: 16 }} onClick={exportCSV}>📥 Export CSV</button>
+        </>}
+      </>}
 
+      {/* Share section */}
       <div className="card" style={{ marginTop: 24 }}>
         <span className="section-label">Share this poll</span>
+        {poll.deadline && (
+          <div style={{ padding: '10px 16px', background: new Date(poll.deadline) < new Date() ? 'var(--no-bg)' : 'var(--maybe-bg)', borderRadius: 'var(--radius-sm)', marginBottom: 14, fontSize: 13, fontWeight: 600, color: new Date(poll.deadline) < new Date() ? 'var(--no)' : 'var(--maybe)' }}>
+            {new Date(poll.deadline) < new Date() ? '⛔ Voting is closed' : `⏰ Deadline: ${new Date(poll.deadline).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`}
+          </div>
+        )}
         <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 }}>Send this link — anyone can vote without signing up.</p>
-        <div className="share-box">
+        <div className="share-box" style={{ marginBottom: 12 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-soft)', whiteSpace: 'nowrap' }}>Link:</span>
           <input readOnly value={typeof window !== 'undefined' ? window.location.href : ''} />
           <button className="btn btn-sm btn-primary" onClick={() => { navigator.clipboard.writeText(window.location.href); showToast('Link copied!') }}>Copy</button>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+          <a href={`https://wa.me/?text=${encodeURIComponent(poll.title + ' — Vote here: ' + (typeof window !== 'undefined' ? window.location.href : ''))}`} target="_blank" rel="noopener" className="btn btn-sm btn-secondary" style={{ background: '#25D366', color: '#fff', border: 'none' }}>WhatsApp</a>
+          <a href={`https://t.me/share/url?url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}&text=${encodeURIComponent(poll.title + ' — Vote for the best time!')}`} target="_blank" rel="noopener" className="btn btn-sm btn-secondary" style={{ background: '#0088cc', color: '#fff', border: 'none' }}>Telegram</a>
+          <a href={`mailto:?subject=${encodeURIComponent(poll.title + ' — Vote for the best time')}&body=${encodeURIComponent('Please vote for the best time:\n\n' + (typeof window !== 'undefined' ? window.location.href : ''))}`} className="btn btn-sm btn-secondary">Email</a>
+          <button className="btn btn-sm btn-secondary" onClick={() => { if (navigator.share) navigator.share({ title: poll.title, text: 'Vote for the best time!', url: window.location.href }).catch(() => {}) }}>Share...</button>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <img src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`} alt="QR Code" width="160" height="160" style={{ borderRadius: 8 }} />
+          <p style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 6 }}>Scan to vote</p>
         </div>
       </div>
 
