@@ -83,7 +83,7 @@ useEffect(() => {
     const dates = [...selectedDates].sort()
     const slotKeys: string[] = []; const gridData: Record<string, string[]> = {}
     dates.forEach(ds => { const s = timeGrid[ds]; gridData[ds] = s ? [...s].sort() : []; if (!s || s.size === 0) slotKeys.push(ds + '_allday'); else [...s].sort().forEach(t => slotKeys.push(ds + '_' + t)) })
-    const poll = await createPoll({ user_id: userId, title: title.trim(), description: desc.trim() || null, duration, location: location.trim() || null, timezone, dates, slot_keys: slotKeys, grid_data: gridData })
+    const poll = await createPoll({ user_id: userId, title: title.trim(), description: desc.trim() || null, duration, location: location.trim() || null, timezone, dates, slot_keys: slotKeys, grid_data: gridData, deadline: null })
     if (poll) router.push(`/poll/${poll.id}`)
     else { alert('Failed to create poll.'); setSaving(false) }
   }
