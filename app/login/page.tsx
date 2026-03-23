@@ -71,7 +71,7 @@ function LoginForm() {
             <a onClick={async () => {
               if (!email) { setError('Enter your email first.'); return }
               setLoading(true); setError('')
-              const { error: e } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/login' })
+              const { error: e } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: 'https://rendezvous-phi.vercel.app/reset-password' })
               if (e) { setError(e.message) } else { setSuccess('Password reset link sent to your email!') }
               setLoading(false)
             }} style={{ display: 'block', marginTop: 8, fontSize: 13, color: 'var(--accent)', cursor: 'pointer' }}>
