@@ -143,7 +143,16 @@ export default function PollPage() {
                       const skConv = showConv ? fmtConv(ds, skTime) : ''
                       return (
                         <div key={sk} onClick={() => cycleVote(sk)} className={`vote-pill ${skV || ''}`}>
-                          {skTime === 'allday' ? 'All day' : (skConv || skTime)}
+                          {skTime === 'allday' ? 'All day' : (() => {
+                            const display = skConv || skTime
+                            const dur = parseInt(poll.duration)
+                            if (!dur) return display
+                            const [h, m] = display.split(':').map(Number)
+                            const endMin = h * 60 + m + dur
+                            const endH = Math.floor(endMin / 60) % 24
+                            const endM = endMin % 60
+                            return `${display}–${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`
+                          })()}
                           {skV === 'yes' && <span style={{ fontSize: 13 }}>✓</span>}
                           {skV === 'maybe' && <span style={{ fontSize: 13 }}>?</span>}
                           {skV === 'no' && <span style={{ fontSize: 13 }}>✗</span>}
