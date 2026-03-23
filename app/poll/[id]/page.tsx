@@ -94,9 +94,8 @@ export default function PollPage() {
 
       <div className="tz-banner">
         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-soft)' }}>🌐 Your timezone:</span>
-        <select value={voterTz} onChange={e => setVoterTz(e.target.value)} style={{ padding: '7px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-xs)', fontFamily: 'inherit', fontSize: 13, minWidth: 240 }}>
-          {TZ_LIST.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
+        <input list="tz-list" value={TZ_LIST.find(t => t.value === voterTz)?.label || ''} onChange={e => { const match = TZ_LIST.find(t => t.label === e.target.value); if (match) setVoterTz(match.value) }} placeholder="Search timezone..." style={{ padding: '7px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-xs)', fontFamily: 'inherit', fontSize: 13, minWidth: 280 }} />
+        <datalist id="tz-list">{TZ_LIST.map(t => <option key={t.value} value={t.label} />)}</datalist>
         <span className="tz-offset-badge" style={tzDiff !== 0 ? { background: tzDiff > 0 ? '#FFF5DC' : '#E8F0EB', color: tzDiff > 0 ? '#B8860B' : 'var(--accent)' } : {}}>
           {tzDiff === 0 ? 'Same as poll' : `${tzDiff >= 0 ? '+' : ''}${tzDiff}h from poll`}
         </span>
