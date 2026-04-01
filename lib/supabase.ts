@@ -42,7 +42,10 @@ export async function signInWithEmail(email: string, password: string) {
 export async function signInWithGoogle() {
   return supabase.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: 'https://rendezvous-phi.vercel.app/dashboard' }
+    options: {
+      redirectTo: 'https://rendezvous-phi.vercel.app/dashboard',
+      scopes: 'https://www.googleapis.com/auth/calendar.readonly',
+    }
   })
 }
 
