@@ -60,10 +60,10 @@ export default function PollPage() {
     if (!poll || !votes.length) return
     const header = ['Participant', ...poll.slot_keys.map(k => { const [ds, t] = splitKey(k); return ds + ' ' + t })]
     let csv = header.join(',') + '\n'
-    votes.forEach(v => { csv += `"${v.voter_name.replace(/"/g, '""')}",${poll.slot_keys.map(k => v.choices[k] || 'no').join(',')}\n` })
+    votes.forEach(v => { csv += '"' + v.voter_name.replace(/"/g, '""') + '",' + poll.slot_keys.map(k => v.choices[k] || 'no').join(',') + '\n' })
     const sc = poll.slot_keys.map(k => { let s = 0; votes.forEach(v => { if (v.choices[k] === 'yes') s += 2; else if (v.choices[k] === 'maybe') s += 1 }); return Math.round(s / (votes.length * 2) * 100) + '%' })
     csv += 'Score,' + sc.join(',') + '\n'
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `${poll.title.replace(/[^a-z0-9]/gi, '_')}_results.csv`; a.click()
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = poll.title.replace(/[^a-z0-9]/gi, '_') + '_results.csv'; a.click()
     showToast('CSV downloaded!')
   }
 
@@ -75,9 +75,18 @@ export default function PollPage() {
   if (notFound || !poll) return <div className="app"><div style={{ textAlign: 'center', padding: 80 }}><h2 style={{ fontFamily: "'Instrument Serif', serif", fontSize: 28 }}>Poll not found</h2><p style={{ color: 'var(--ink-muted)', marginTop: 8 }}>Check the link and try again.</p></div></div>
 
   const showConv = poll.timezone !== voterTz
+
   const renderHeaders = () => poll.slot_keys.map(k => {
-    const [ds, t] = splitKey(k); const d = new Date(ds + 'T00:00:00'); const conv = showConv ? fmtConv(ds, t) : ''
-    return <th key={k}><div className="th-date">{d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', weekday: 'short' })}</div><div className="th-time">{t === 'allday' ? 'All day' : t}</div>{conv && <div className="th-converted">🕐 {conv}</div>}</th>
+    const [ds, t] = splitKey(k)
+    const d = new Date(ds + 'T00:00:00')
+    const conv = showConv ? fmtConv(ds, t) : ''
+    return (
+      <th key={k}>
+        <div className="th-date">{d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', weekday: 'short' })}</div>
+        <div className="th-time">{t === 'allday' ? 'All day' : t}</div>
+        {conv && <div className="th-converted">🕐 {conv}</div>}
+      </th>
+    )
   })
 
   const renderHeatmap = () => {
@@ -124,6 +133,21 @@ export default function PollPage() {
         </div>
       </div>
     )
+  }
+
+  const makeCalendarLinks = (ds: string, timeStr: string) => {
+    const startStr = timeStr === 'allday' ? '00:00' : timeStr
+    const dur = parseInt(poll.duration) || 60
+    const [sh, sm] = startStr.split(':').map(Number)
+    const endMin = sh * 60 + sm + dur
+    const endStr = String(Math.floor(endMin / 60) % 24).padStart(2, '0') + ':' + String(endMin % 60).padStart(2, '0')
+    const dateClean = ds.replace(/-/g, '')
+    const startFull = dateClean + 'T' + startStr.replace(':', '') + '00'
+    const endFull = dateClean + 'T' + endStr.replace(':', '') + '00'
+    const gcalUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(poll.title) + '&dates=' + startFull + '/' + endFull + '&details=' + encodeURIComponent(poll.description || '') + '&location=' + encodeURIComponent(poll.location || '')
+    const outlookUrl = 'https://outlook.live.com/calendar/0/action/compose?subject=' + encodeURIComponent(poll.title) + '&startdt=' + ds + 'T' + startStr + ':00&enddt=' + ds + 'T' + endStr + ':00&body=' + encodeURIComponent(poll.description || '') + '&location=' + encodeURIComponent(poll.location || '')
+    const icsContent = 'BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:' + poll.title + '\nDTSTART:' + startFull + '\nDTEND:' + endFull + '\nLOCATION:' + (poll.location || '') + '\nDESCRIPTION:' + (poll.description || '') + '\nEND:VEVENT\nEND:VCALENDAR'
+    return { gcalUrl, outlookUrl, icsContent }
   }
 
   return (
@@ -198,7 +222,7 @@ export default function PollPage() {
                             const endMin = h * 60 + m + dur
                             const endH = Math.floor(endMin / 60) % 24
                             const endM = endMin % 60
-                            return display + '–' + String(endH).padStart(2, '0') + ':' + String(endM).padStart(2, '0')
+                            return display + '\u2013' + String(endH).padStart(2, '0') + ':' + String(endM).padStart(2, '0')
                           })()}
                           {skV === 'yes' && <span style={{ fontSize: 13 }}>✓</span>}
                           {skV === 'maybe' && <span style={{ fontSize: 13 }}>?</span>}
@@ -237,18 +261,15 @@ export default function PollPage() {
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', maxWidth: 500, margin: '0 auto' }}>
               <div style={{ flex: 1, minWidth: 180 }}>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--ink-soft)', marginBottom: 6 }}>Name *</label>
-                <input type="text" value={voterName} onChange={e => setVoterName(e.target.value)} placeholder="Your name"
-                  style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontFamily: 'inherit', fontSize: 14 }} />
+                <input type="text" value={voterName} onChange={e => setVoterName(e.target.value)} placeholder="Your name" style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontFamily: 'inherit', fontSize: 14 }} />
               </div>
               <div style={{ flex: 1, minWidth: 180 }}>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--ink-soft)', marginBottom: 6 }}>Email <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: '0' }}>— optional</span></label>
-                <input type="email" value={voterEmail} onChange={e => setVoterEmail(e.target.value)} placeholder="Get notified when results are in"
-                  style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontFamily: 'inherit', fontSize: 14 }} />
+                <input type="email" value={voterEmail} onChange={e => setVoterEmail(e.target.value)} placeholder="Get notified when results are in" style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontFamily: 'inherit', fontSize: 14 }} />
               </div>
             </div>
             <div style={{ textAlign: 'center', marginTop: 20 }}>
-              <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting || !hasVoted}
-                style={{ padding: '14px 48px', fontSize: 16, opacity: hasVoted ? 1 : 0.5 }}>
+              <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting || !hasVoted} style={{ padding: '14px 48px', fontSize: 16, opacity: hasVoted ? 1 : 0.5 }}>
                 {submitting ? 'Submitting...' : 'Submit Vote'}
               </button>
               <p style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 10 }}>Already voted? Submit again with the same name to update your vote.</p>
@@ -266,12 +287,7 @@ export default function PollPage() {
             <div>
               <div className="vote-table-wrapper">
                 <table className="vote-table">
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: 'left' }}>Participant</th>
-                      {renderHeaders()}
-                    </tr>
-                  </thead>
+                  <thead><tr><th style={{ textAlign: 'left' }}>Participant</th>{renderHeaders()}</tr></thead>
                   <tbody>
                     {votes.map(v => (
                       <tr key={v.id}>
@@ -306,6 +322,9 @@ export default function PollPage() {
                 const grouped: Record<string, string[]> = {}
                 bestSlots.forEach(k => { const [ds, t] = splitKey(k); if (!grouped[ds]) grouped[ds] = []; grouped[ds].push(t) })
                 const bDays = Object.keys(grouped).sort()
+                const firstDs = bDays[0]
+                const firstTime = grouped[firstDs].sort()[0]
+                const cal = makeCalendarLinks(firstDs, firstTime)
                 return (
                   <div style={{ marginTop: 20, padding: 20, background: 'var(--yes-bg)', borderRadius: 'var(--radius)', border: '1px solid var(--yes)' }}>
                     <div style={{ fontWeight: 600, color: 'var(--yes)', fontSize: 15, marginBottom: 12 }}>🎯 Best Time{bDays.length > 1 ? 's' : ''} ({Math.round(bestScore / (votes.length * 2) * 100)}% match)</div>
@@ -322,55 +341,20 @@ export default function PollPage() {
                         )
                       })}
                     </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
+                      <a href={cal.gcalUrl} target="_blank" rel="noopener" className="btn btn-sm btn-secondary" style={{ fontSize: 12 }}>📅 Google Calendar</a>
+                      <a href={cal.outlookUrl} target="_blank" rel="noopener" className="btn btn-sm btn-secondary" style={{ fontSize: 12 }}>📅 Outlook</a>
+                      <button className="btn btn-sm btn-secondary" style={{ fontSize: 12 }} onClick={() => {
+                        const blob = new Blob([cal.icsContent], { type: 'text/calendar' })
+                        const link = document.createElement('a')
+                        link.href = URL.createObjectURL(blob)
+                        link.download = poll.title.replace(/[^a-z0-9]/gi, '_') + '.ics'
+                        link.click()
+                        showToast('Calendar file downloaded!')
+                      }}>📅 Download .ics</button>
+                    </div>
                   </div>
                 )
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
-                  {bDays.map(ds => {
-                    const bSlotTimes = grouped[ds].sort()
-                    const firstTime = bSlotTimes[0]
-                    const startStr = firstTime === 'allday' ? '00:00' : firstTime
-                    const dur = parseInt(poll.duration) || 60
-                    const [sh, sm] = startStr.split(':').map(Number)
-                    const endMin = sh * 60 + sm + dur
-                    const endStr = String(Math.floor(endMin / 60) % 24).padStart(2, '0') + ':' + String(endMin % 60).padStart(2, '0')
-                    const dateClean = ds.replace(/-/g, '')
-                    const startFull = dateClean + 'T' + startStr.replace(':', '') + '00'
-                    const endFull = dateClean + 'T' + endStr.replace(':', '') + '00'
-                    const gcalUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(poll.title) + '&dates=' + startFull + '/' + endFull + '&details=' + encodeURIComponent(poll.description || '') + '&location=' + encodeURIComponent(poll.location || '')
-                    const outlookUrl = 'https://outlook.live.com/calendar/0/action/compose?subject=' + encodeURIComponent(poll.title) + '&startdt=' + ds + 'T' + startStr + ':00&enddt=' + ds + 'T' + endStr + ':00&body=' + encodeURIComponent(poll.description || '') + '&location=' + encodeURIComponent(poll.location || '')
-                    return null
-                  })}
-                  {(() => {
-                    const firstDs = bDays[0]
-                    const bSlotTimes = grouped[firstDs].sort()
-                    const firstTime = bSlotTimes[0]
-                    const startStr = firstTime === 'allday' ? '00:00' : firstTime
-                    const dur = parseInt(poll.duration) || 60
-                    const [sh, sm] = startStr.split(':').map(Number)
-                    const endMin = sh * 60 + sm + dur
-                    const endStr = String(Math.floor(endMin / 60) % 24).padStart(2, '0') + ':' + String(endMin % 60).padStart(2, '0')
-                    const dateClean = firstDs.replace(/-/g, '')
-                    const startFull = dateClean + 'T' + startStr.replace(':', '') + '00'
-                    const endFull = dateClean + 'T' + endStr.replace(':', '') + '00'
-                    const gcalUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(poll.title) + '&dates=' + startFull + '/' + endFull + '&details=' + encodeURIComponent(poll.description || '') + '&location=' + encodeURIComponent(poll.location || '')
-                    const outlookUrl = 'https://outlook.live.com/calendar/0/action/compose?subject=' + encodeURIComponent(poll.title) + '&startdt=' + firstDs + 'T' + startStr + ':00&enddt=' + firstDs + 'T' + endStr + ':00&body=' + encodeURIComponent(poll.description || '') + '&location=' + encodeURIComponent(poll.location || '')
-                    const icsContent = 'BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:' + poll.title + '\nDTSTART:' + startFull + '\nDTEND:' + endFull + '\nLOCATION:' + (poll.location || '') + '\nDESCRIPTION:' + (poll.description || '') + '\nEND:VEVENT\nEND:VCALENDAR'
-                    return (
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <a href={gcalUrl} target="_blank" rel="noopener" className="btn btn-sm btn-secondary" style={{ fontSize: 12 }}>📅 Google Calendar</a>
-                        <a href={outlookUrl} target="_blank" rel="noopener" className="btn btn-sm btn-secondary" style={{ fontSize: 12 }}>📅 Outlook</a>
-                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 12 }} onClick={() => {
-                          const blob = new Blob([icsContent], { type: 'text/calendar' })
-                          const a = document.createElement('a')
-                          a.href = URL.createObjectURL(blob)
-                          a.download = poll.title.replace(/[^a-z0-9]/gi, '_') + '.ics'
-                          a.click()
-                          showToast('Calendar file downloaded!')
-                        }}>📅 Download .ics</button>
-                      </div>
-                    )
-                  })()}
-                </div>
               })()}
 
               <button className="btn btn-secondary btn-sm" style={{ marginTop: 16 }} onClick={exportCSV}>📥 Export CSV</button>
@@ -393,9 +377,9 @@ export default function PollPage() {
           <button className="btn btn-sm btn-primary" onClick={() => { navigator.clipboard.writeText(window.location.href); showToast('Link copied!') }}>Copy</button>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-          <a href={'https://wa.me/?text=' + encodeURIComponent(poll.title + ' — Vote here: ' + (typeof window !== 'undefined' ? window.location.href : ''))} target="_blank" rel="noopener" className="btn btn-sm btn-secondary" style={{ background: '#25D366', color: '#fff', border: 'none' }}>WhatsApp</a>
-          <a href={'https://t.me/share/url?url=' + encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '') + '&text=' + encodeURIComponent(poll.title + ' — Vote for the best time!')} target="_blank" rel="noopener" className="btn btn-sm btn-secondary" style={{ background: '#0088cc', color: '#fff', border: 'none' }}>Telegram</a>
-          <a href={'mailto:?subject=' + encodeURIComponent(poll.title + ' — Vote for the best time') + '&body=' + encodeURIComponent('Please vote for the best time:\n\n' + (typeof window !== 'undefined' ? window.location.href : ''))} className="btn btn-sm btn-secondary">Email</a>
+          <a href={'https://wa.me/?text=' + encodeURIComponent(poll.title + ' \u2014 Vote here: ' + (typeof window !== 'undefined' ? window.location.href : ''))} target="_blank" rel="noopener" className="btn btn-sm btn-secondary" style={{ background: '#25D366', color: '#fff', border: 'none' }}>WhatsApp</a>
+          <a href={'https://t.me/share/url?url=' + encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '') + '&text=' + encodeURIComponent(poll.title + ' \u2014 Vote for the best time!')} target="_blank" rel="noopener" className="btn btn-sm btn-secondary" style={{ background: '#0088cc', color: '#fff', border: 'none' }}>Telegram</a>
+          <a href={'mailto:?subject=' + encodeURIComponent(poll.title + ' \u2014 Vote for the best time') + '&body=' + encodeURIComponent('Please vote for the best time:\n\n' + (typeof window !== 'undefined' ? window.location.href : ''))} className="btn btn-sm btn-secondary">Email</a>
           <button className="btn btn-sm btn-secondary" onClick={() => { if (navigator.share) navigator.share({ title: poll.title, text: 'Vote for the best time!', url: window.location.href }).catch(() => {}) }}>Share...</button>
         </div>
         <div style={{ textAlign: 'center' }}>
