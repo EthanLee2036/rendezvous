@@ -1,5 +1,6 @@
 'use client'
 
+import { getGoogleBusyTimes, isSlotBusy, type BusySlot } from '@/lib/calendar'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, createPoll } from '@/lib/supabase'
@@ -26,6 +27,8 @@ export default function HomePage() {
   const [timeGrid, setTimeGrid] = useState<Record<string, Set<string>>>({})
   const [interval, setInterval_] = useState(60)
   const [deadline, setDeadline] = useState('')
+  const [busySlots, setBusySlots] = useState<BusySlot[]>([])
+  const [loadingBusy, setLoadingBusy] = useState(false)
   const [saving, setSaving] = useState(false)
   const dragRef = useRef<{ mode: 'on' | 'off' } | null>(null)
 
@@ -170,6 +173,18 @@ export default function HomePage() {
       {selectedDates.size > 0 && (
         <div className="card" style={{ marginBottom: 24 }}>
           <span className="section-label">② Paint Time Slots</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, padding: '12px 16px', background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)' }}>
+            <button className="btn btn-sm btn-secondary" disabled={loadingBusy} onClick={async () => {
+              setLoadingBusy(true)
+              const busy = await getGoogleBusyTimes([...selectedDates], timezone)
+              setBusySlots(busy)
+              setLoadingBusy(false)
+              if (busy.length === 0) alert('No busy times found, or Google Calendar not connected. Try logging in with Google first.')
+            }}>
+              {loadingBusy ? 'Loading...' : '📅 Import busy times from Google Calendar'}
+            </button>
+            {busySlots.length > 0 && <span style={{ fontSize: 12, color: 'var(--accent)' }}>{busySlots.length} busy slots found — shown in red below</span>}
+          </div>
           <div className="time-presets">
             <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-soft)' }}>Quick fill:</span>
             {['morning','afternoon','evening','business'].map(t => <button key={t} className="preset-btn" onClick={() => applyPreset(t)}>{t === 'morning' ? '🌅 Morning 8–12' : t === 'afternoon' ? '☀️ Afternoon 12–17' : t === 'evening' ? '🌙 Evening 17–21' : '💼 Business 9–17'}</button>)}
@@ -180,7 +195,7 @@ export default function HomePage() {
             {slots.map(t => <div key={t} className="tgrid-header-cell">{t}</div>)}
             {sortedDates.map(ds => { const d = new Date(ds + 'T00:00:00'); return [
               <div key={ds + '-l'} className="tgrid-date-label" style={{ position: 'sticky', left: 0, zIndex: 1 }}>{d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</div>,
-              ...slots.map(t => { const on = timeGrid[ds]?.has(t); return <div key={ds + t} className={`tgrid-cell${on ? ' on' : ''}`} onMouseDown={e => { e.preventDefault(); const mode = on ? 'off' : 'on'; dragRef.current = { mode }; toggleCell(ds, t, mode) }} onMouseEnter={() => { if (dragRef.current) toggleCell(ds, t, dragRef.current.mode) }} /> })
+              ...slots.map(t => { const on = timeGrid[ds]?.has(t); const busy = busySlots.length > 0 && isSlotBusy(ds, t, parseInt(duration) || 60, busySlots); return <div key={ds + t} className={`tgrid-cell${on ? ' on' : ''}${busy ? ' busy' : ''}`} onMouseDown={e => { e.preventDefault(); const mode = on ? 'off' : 'on'; dragRef.current = { mode }; toggleCell(ds, t, mode) }} onMouseEnter={() => { if (dragRef.current) toggleCell(ds, t, dragRef.current.mode) }} /> })
             ] })}
           </div></div>
           <p style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 10 }}>💡 Click or drag to toggle slots.</p>
