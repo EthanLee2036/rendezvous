@@ -324,6 +324,53 @@ export default function PollPage() {
                     </div>
                   </div>
                 )
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
+                  {bDays.map(ds => {
+                    const bSlotTimes = grouped[ds].sort()
+                    const firstTime = bSlotTimes[0]
+                    const startStr = firstTime === 'allday' ? '00:00' : firstTime
+                    const dur = parseInt(poll.duration) || 60
+                    const [sh, sm] = startStr.split(':').map(Number)
+                    const endMin = sh * 60 + sm + dur
+                    const endStr = String(Math.floor(endMin / 60) % 24).padStart(2, '0') + ':' + String(endMin % 60).padStart(2, '0')
+                    const dateClean = ds.replace(/-/g, '')
+                    const startFull = dateClean + 'T' + startStr.replace(':', '') + '00'
+                    const endFull = dateClean + 'T' + endStr.replace(':', '') + '00'
+                    const gcalUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(poll.title) + '&dates=' + startFull + '/' + endFull + '&details=' + encodeURIComponent(poll.description || '') + '&location=' + encodeURIComponent(poll.location || '')
+                    const outlookUrl = 'https://outlook.live.com/calendar/0/action/compose?subject=' + encodeURIComponent(poll.title) + '&startdt=' + ds + 'T' + startStr + ':00&enddt=' + ds + 'T' + endStr + ':00&body=' + encodeURIComponent(poll.description || '') + '&location=' + encodeURIComponent(poll.location || '')
+                    return null
+                  })}
+                  {(() => {
+                    const firstDs = bDays[0]
+                    const bSlotTimes = grouped[firstDs].sort()
+                    const firstTime = bSlotTimes[0]
+                    const startStr = firstTime === 'allday' ? '00:00' : firstTime
+                    const dur = parseInt(poll.duration) || 60
+                    const [sh, sm] = startStr.split(':').map(Number)
+                    const endMin = sh * 60 + sm + dur
+                    const endStr = String(Math.floor(endMin / 60) % 24).padStart(2, '0') + ':' + String(endMin % 60).padStart(2, '0')
+                    const dateClean = firstDs.replace(/-/g, '')
+                    const startFull = dateClean + 'T' + startStr.replace(':', '') + '00'
+                    const endFull = dateClean + 'T' + endStr.replace(':', '') + '00'
+                    const gcalUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(poll.title) + '&dates=' + startFull + '/' + endFull + '&details=' + encodeURIComponent(poll.description || '') + '&location=' + encodeURIComponent(poll.location || '')
+                    const outlookUrl = 'https://outlook.live.com/calendar/0/action/compose?subject=' + encodeURIComponent(poll.title) + '&startdt=' + firstDs + 'T' + startStr + ':00&enddt=' + firstDs + 'T' + endStr + ':00&body=' + encodeURIComponent(poll.description || '') + '&location=' + encodeURIComponent(poll.location || '')
+                    const icsContent = 'BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:' + poll.title + '\nDTSTART:' + startFull + '\nDTEND:' + endFull + '\nLOCATION:' + (poll.location || '') + '\nDESCRIPTION:' + (poll.description || '') + '\nEND:VEVENT\nEND:VCALENDAR'
+                    return (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <a href={gcalUrl} target="_blank" rel="noopener" className="btn btn-sm btn-secondary" style={{ fontSize: 12 }}>📅 Google Calendar</a>
+                        <a href={outlookUrl} target="_blank" rel="noopener" className="btn btn-sm btn-secondary" style={{ fontSize: 12 }}>📅 Outlook</a>
+                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 12 }} onClick={() => {
+                          const blob = new Blob([icsContent], { type: 'text/calendar' })
+                          const a = document.createElement('a')
+                          a.href = URL.createObjectURL(blob)
+                          a.download = poll.title.replace(/[^a-z0-9]/gi, '_') + '.ics'
+                          a.click()
+                          showToast('Calendar file downloaded!')
+                        }}>📅 Download .ics</button>
+                      </div>
+                    )
+                  })()}
+                </div>
               })()}
 
               <button className="btn btn-secondary btn-sm" style={{ marginTop: 16 }} onClick={exportCSV}>📥 Export CSV</button>
