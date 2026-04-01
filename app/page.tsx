@@ -126,7 +126,18 @@ export default function HomePage() {
         <div className="form-group"><label>Description (optional)</label><textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Add details..." /></div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <div className="form-group" style={{ flex: 1, minWidth: 180 }}><label>Duration</label><select value={duration} onChange={e => setDuration(e.target.value)}><option value="30">30 min</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option><option value="0">Full day</option></select></div>
-          <div className="form-group" style={{ flex: 1, minWidth: 180 }}><label>Location</label><input value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Zoom / Room 301" /></div>
+          <div className="form-group" style={{ flex: 1, minWidth: 180 }}>
+            <label>Location</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+              {['Zoom', 'Google Meet', 'Microsoft Teams', 'In-person', 'Phone call'].map(opt => (
+                <button key={opt} type="button" onClick={() => setLocation(location === opt ? '' : opt)}
+                  style={{ padding: '6px 14px', borderRadius: 20, border: location === opt ? '2px solid var(--accent)' : '1px solid var(--border)', background: location === opt ? 'var(--accent-light)' : 'var(--surface)', color: location === opt ? 'var(--accent)' : 'var(--ink)', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: location === opt ? 600 : 400 }}>
+                  {opt === 'Zoom' ? '📹' : opt === 'Google Meet' ? '📹' : opt === 'Microsoft Teams' ? '💬' : opt === 'In-person' ? '📍' : '📞'} {opt}
+                </button>
+              ))}
+            </div>
+            <input value={location} onChange={e => setLocation(e.target.value)} placeholder="Or type a custom location..." />
+          </div>
         </div>
         <div className="form-group" style={{ marginBottom: 0 }}><label>🌐 Poll Timezone</label><select value={timezone} onChange={e => setTimezone(e.target.value)}>{TZ_LIST.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
       </div>
