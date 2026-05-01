@@ -159,7 +159,7 @@ export default function PollPage() {
           <span>📍 {poll.location || 'TBD'}</span>
           <span>⏱ {poll.duration === '0' ? 'Full day' : poll.duration + ' min'}</span>
           <span>📅 {poll.slot_keys.length} slot{poll.slot_keys.length > 1 ? 's' : ''}</span>
-          <span>🌐 {getTzLabel(poll.timezone)}</span>
+          <span>🌐 {poll.timezone.replace(/_/g, ' ')}</span>
         </div>
       </div>
 
