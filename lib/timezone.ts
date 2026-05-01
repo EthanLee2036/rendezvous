@@ -45,8 +45,24 @@ export function findClosestTz(iana: string): string {
   return 'Europe/London'
 }
 
-export function getTzOffset(v: string): number {
-  return TZ_LIST.find(t => t.value === v)?.offset ?? 0
+export function getTzOffset(tz: string): number {
+  try {
+    const now = new Date()
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      timeZoneName: 'shortOffset',
+    })
+    const parts = formatter.formatToParts(now)
+    const offsetPart = parts.find(p => p.type === 'timeZoneName')
+    if (!offsetPart) return 0
+    const match = offsetPart.value.match(/GMT([+-]?\d+)?(?::(\d+))?/)
+    if (!match) return 0
+    const hours = parseInt(match[1] || '0')
+    const minutes = parseInt(match[2] || '0')
+    return hours + (hours < 0 ? -minutes : minutes) / 60
+  } catch {
+    return 0
+  }
 }
 
 export function getTzLabel(v: string): string {
