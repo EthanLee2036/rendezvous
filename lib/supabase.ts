@@ -158,3 +158,9 @@ export async function createBooking(booking: Omit<Booking, 'id' | 'created_at'>)
   if (error) { console.error('Create booking error:', error); return null }
   return data
 }
+export async function getMyBookings(): Promise<Booking[]> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+  const { data } = await supabase.from('bookings').select('*').eq('host_user_id', user.id).order('booking_date', { ascending: true })
+  return data || []
+}
