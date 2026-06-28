@@ -45,6 +45,10 @@ export async function signInWithGoogle() {
     options: {
       redirectTo: 'https://rendezvous-phi.vercel.app/dashboard',
       scopes: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events',
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'consent',
+      },
     }
   })
 }
