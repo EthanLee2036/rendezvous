@@ -95,3 +95,66 @@ export async function getVotes(pollId: string): Promise<Vote[]> {
   if (error) return []
   return data || []
 }
+// ===== Booking / Availability (Calendly-style) =====
+
+export interface Availability {
+  id: string
+  user_id: string
+  username: string | null
+  display_name: string | null
+  timezone: string
+  meeting_duration: number
+  buffer_minutes: number
+  weekly_rules: Record<string, { start: string; end: string }[]>
+  created_at: string
+}
+
+export interface Booking {
+  id: string
+  host_user_id: string
+  booker_name: string
+  booker_email: string
+  booking_date: string
+  booking_time: string
+  duration: number
+  notes: string | null
+  created_at: string
+}
+
+export async function getMyAvailability(): Promise<Availability | null> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data } = await supabase.from('availability').select('*').eq('user_id', user.id).maybeSingle()
+  return data
+}
+
+export async function saveAvailability(av: Partial<Availability>): Promise<Availability | null> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const existing = await getMyAvailability()
+  if (existing) {
+    const { data, error } = await supabase.from('availability').update(av).eq('user_id', user.id).select().single()
+    if (error) { console.error('Update availability error:', error); return null }
+    return data
+  } else {
+    const { data, error } = await supabase.from('availability').insert({ ...av, user_id: user.id }).select().single()
+    if (error) { console.error('Insert availability error:', error); return null }
+    return data
+  }
+}
+
+export async function getAvailabilityByUsername(username: string): Promise<Availability | null> {
+  const { data } = await supabase.from('availability').select('*').eq('username', username).maybeSingle()
+  return data
+}
+
+export async function getBookingsForHost(hostUserId: string, date: string): Promise<Booking[]> {
+  const { data } = await supabase.from('bookings').select('*').eq('host_user_id', hostUserId).eq('booking_date', date)
+  return data || []
+}
+
+export async function createBooking(booking: Omit<Booking, 'id' | 'created_at'>): Promise<Booking | null> {
+  const { data, error } = await supabase.from('bookings').insert(booking).select().single()
+  if (error) { console.error('Create booking error:', error); return null }
+  return data
+}
