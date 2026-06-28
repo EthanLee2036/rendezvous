@@ -54,3 +54,40 @@ export function isSlotBusy(date: string, time: string, duration: number, busySlo
     return slotStart < busyEnd && slotEnd > busyStart
   })
 }
+export async function createGoogleCalendarEvent(params: {
+  title: string
+  description: string
+  startDateTime: string
+  endDateTime: string
+  timezone: string
+  attendeeEmail?: string
+}): Promise<boolean> {
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.provider_token || (typeof window !== 'undefined' ? sessionStorage.getItem('google_access_token') : null)
+  if (!token) return false
+
+  try {
+    const event: Record<string, unknown> = {
+      summary: params.title,
+      description: params.description,
+      start: { dateTime: params.startDateTime, timeZone: params.timezone },
+      end: { dateTime: params.endDateTime, timeZone: params.timezone },
+    }
+    if (params.attendeeEmail) {
+      event.attendees = [{ email: params.attendeeEmail }]
+    }
+
+    const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(event),
+    })
+
+    return res.ok
+  } catch {
+    return false
+  }
+}
