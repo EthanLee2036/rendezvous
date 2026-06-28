@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, getMyAvailability, saveAvailability } from '@/lib/supabase'
+import { supabase, getMyAvailability, saveAvailability, saveGoogleRefreshToken, signInWithGoogle } from '@/lib/supabase'
 import { TZ_LIST, detectTimezone, findClosestTz } from '@/lib/timezone'
 
 const DAYS = [
@@ -37,24 +37,36 @@ export default function AvailabilityPage() {
     sun: [],
   })
   const [savedUsername, setSavedUsername] = useState('')
+  const [calendarConnected, setCalendarConnected] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) { router.push('/login'); return }
-      getMyAvailability().then(av => {
-        if (av) {
-          setUsername(av.username || '')
-          setSavedUsername(av.username || '')
-          setDisplayName(av.display_name || '')
-          setTimezone(av.timezone)
-          setDuration(av.meeting_duration)
-          setBuffer(av.buffer_minutes)
-          if (av.weekly_rules && Object.keys(av.weekly_rules).length > 0) setRules(av.weekly_rules)
+      // Capture refresh token from Google OAuth callback
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session?.provider_refresh_token) {
+          await saveGoogleRefreshToken(session.provider_refresh_token)
+          setCalendarConnected(true)
         }
-        setLoading(false)
       })
-    })
-  }, [router])
+  
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (!user) { router.push('/login'); return }
+        getMyAvailability().then(av => {
+          if (av) {
+            setUsername(av.username || '')
+            setSavedUsername(av.username || '')
+            setDisplayName(av.display_name || '')
+            setTimezone(av.timezone)
+            setDuration(av.meeting_duration)
+            setBuffer(av.buffer_minutes)
+            setCalendarConnected(av.google_calendar_connected || false)
+            if (av.weekly_rules && Object.keys(av.weekly_rules).length > 0) setRules(av.weekly_rules)
+          }
+          setLoading(false)
+        })
+      })
+  
+      return () => subscription.unsubscribe()
+    }, [router])
 
   const toggleDay = (day: string) => {
     setRules(prev => ({ ...prev, [day]: prev[day]?.length > 0 ? [] : [{ start: '09:00', end: '17:00' }] }))
@@ -151,6 +163,28 @@ export default function AvailabilityPage() {
             {TZ_LIST.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
         </div>
+      </div>
+      <div className="card" style={{ marginBottom: 24 }}>
+        <span className="section-label">Google Calendar</span>
+        {calendarConnected ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--yes-bg)', borderRadius: 'var(--radius-sm)' }}>
+            <span style={{ fontSize: 20 }}>✓</span>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--yes)' }}>Connected</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>New bookings will be added to your Google Calendar automatically.</div>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 }}>Connect your Google Calendar so bookings are automatically added to it. (Save your availability first, then connect.)</p>
+            <button className="btn btn-secondary btn-sm" onClick={async () => {
+              if (!savedUsername) { alert('Please save your availability first, then connect.'); return }
+              await signInWithGoogle()
+            }}>
+              📅 Connect Google Calendar
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
