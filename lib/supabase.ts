@@ -110,6 +110,8 @@ export interface Availability {
   meeting_duration: number
   buffer_minutes: number
   weekly_rules: Record<string, { start: string; end: string }[]>
+  google_refresh_token: string | null
+  google_calendar_connected: boolean
   created_at: string
 }
 
