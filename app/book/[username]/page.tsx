@@ -57,7 +57,7 @@ export default function BookingPage() {
     setSelectedDate(dateStr)
     setSelectedTime(null)
     if (av) {
-      const bookings = await getBookingsForHost(av.host_user_id || av.user_id, dateStr)
+      const bookings = await getBookingsForHost(av.user_id, dateStr)
       setBookedTimes(bookings.map(b => b.booking_time))
     }
     setStep('time')
@@ -94,7 +94,7 @@ export default function BookingPage() {
     if (!bookerEmail.trim()) return alert('Please enter your email.')
     setSubmitting(true)
     const result = await createBooking({
-      host_user_id: av.host_user_id || av.user_id,
+      host_user_id: av.user_id,
       booker_name: bookerName.trim(),
       booker_email: bookerEmail.trim(),
       booking_date: selectedDate,
