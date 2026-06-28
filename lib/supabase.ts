@@ -168,3 +168,13 @@ export async function getMyBookings(): Promise<Booking[]> {
   const { data } = await supabase.from('bookings').select('*').eq('host_user_id', user.id).order('booking_date', { ascending: true })
   return data || []
 }
+export async function saveGoogleRefreshToken(refreshToken: string): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return false
+  const { error } = await supabase
+    .from('availability')
+    .update({ google_refresh_token: refreshToken, google_calendar_connected: true })
+    .eq('user_id', user.id)
+  if (error) { console.error('Save refresh token error:', error); return false }
+  return true
+}
