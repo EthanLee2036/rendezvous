@@ -36,6 +36,7 @@ export function TopBar() {
             <Link href="/" className="btn btn-ghost btn-sm">Group Poll</Link>
             <Link href="/availability" className="btn btn-ghost btn-sm">Booking Page</Link>
             <Link href="/dashboard" className="btn btn-ghost btn-sm">My Polls</Link>
+            <Link href="/bookings" className="btn btn-ghost btn-sm">My Bookings</Link>
             <div style={{ position: 'relative' }}>
               <button
                 className="btn btn-ghost btn-sm"
