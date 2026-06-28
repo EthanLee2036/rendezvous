@@ -102,9 +102,31 @@ export default function BookingPage() {
       duration: av.meeting_duration,
       notes: notes.trim() || null,
     })
+    if (result) {
+      try {
+        const [h, m] = selectedTime.split(':').map(Number)
+        const startDt = selectedDate + 'T' + String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':00'
+        const endMin = h * 60 + m + av.meeting_duration
+        const endDt = selectedDate + 'T' + String(Math.floor(endMin / 60) % 24).padStart(2, '0') + ':' + String(endMin % 60).padStart(2, '0') + ':00'
+        await fetch('/api/create-calendar-event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            hostUserId: av.user_id,
+            title: (av.display_name || 'Meeting') + ' with ' + bookerName.trim(),
+            description: notes.trim() ? 'Notes: ' + notes.trim() : 'Booked via RendezVous',
+            startDateTime: startDt,
+            endDateTime: endDt,
+            timezone: av.timezone,
+            attendeeEmail: bookerEmail.trim(),
+          }),
+        })
+      } catch {}
+      setConfirmed(true)
+    } else {
+      alert('Failed to book. That slot may have just been taken.')
+    }
     setSubmitting(false)
-    if (result) setConfirmed(true)
-    else alert('Failed to book. That slot may have just been taken.')
   }
 
   if (loading) return <div className="app"><p style={{ textAlign: 'center', padding: 80, color: 'var(--ink-muted)' }}>Loading...</p></div>
